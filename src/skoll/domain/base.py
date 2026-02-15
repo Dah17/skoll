@@ -76,7 +76,7 @@ class Object(ABC):
         for key, item in schema.items():
             results[key] = item.create(prepare_result.value)
         res = combine(results)
-        return cls._init(**res.value) if is_ok(res) else res
+        return cls._init(value=res.value) if is_ok(res) else res
 
     def evolve(self, **kwargs: t.Any) -> t.Self:
         return attrs.evolve(self, **kwargs)
