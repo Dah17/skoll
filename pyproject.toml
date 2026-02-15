@@ -1,0 +1,37 @@
+[project]
+name = "skoll"
+dynamic = ["version"]
+description = "A simple package that provide a basic API python framework based on starlette and some domain driven design concepts"
+readme = "README.md"
+authors = [
+    { name = "Monzon Diarra", email = "diarramonzon4@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "aiohttp>=3.13.3",
+    "asyncpg>=0.31.0",
+    "attrs>=25.4.0",
+    "certifi>=2026.1.4",
+    "nats-py>=2.13.1",
+    "starlette>=0.49.3",
+    "ulid>=1.1",
+]
+
+[project.scripts]
+skoll = "skoll:main"
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.basedpyright]
+reportAny = false
+reportExplicitAny = false
+reportMissingTypeStubs = false
+reportUnusedCallResult = false
+reportUnknownMemberType = false
+typeCheckingMode = "recommended"
+reportUnknownVariableType = false
