@@ -154,12 +154,12 @@ class MessagePayload(Object):
 @define(frozen=True, kw_only=True, slots=True, eq=False)
 class Message(Object):
 
-    topic: str
+    name: str
     source: str
+    payload: MessagePayload
+    context: MessageContext
     id: ID = field(factory=ID.new)
     created_at: DateTime = field(factory=DateTime.now)
-    payload: MessagePayload = field(factory=MessagePayload.default)
-    context: MessageContext = field(factory=MessageContext.default)
 
     @t.override
     def __eq__(self, other: t.Any) -> bool:

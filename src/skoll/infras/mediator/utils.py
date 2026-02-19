@@ -1,31 +1,33 @@
-# import typing as t
+import typing as t
 
-# from skoll.domain import Message
-# from skoll.result import Result, fail, is_fail
-# from skoll.utils import call_with_dependencies
-# from skoll.application import Subscriber, RawMessage
-# from skoll.errors import Error, InternalError, ValidationFailed
+from skoll.domain import Message
+from skoll.result import Result, fail, is_fail
+from skoll.utils import call_with_dependencies
+from skoll.application import Subscriber, RawMessage
+from skoll.errors import Error, InternalError, ValidationFailed
 
-
-# async def run_callback(subscriber: Subscriber, message: Message | RawMessage) -> Result[t.Any]:
-#     topic = message.topic if isinstance(message, Message) else message.get("topic")
-#     try:
-#         msg = get_message(subscriber.msg_cls, message)
-#         return await call_with_dependencies(subscriber.callback, {subscriber.msg_arg: msg})
-#     except Error as err:
-#         return fail(err=err)
-#     except Exception as exc:
-#         return fail(err=InternalError.from_exception(exc, extra={"subject": topic, "message": message}))
+__all__ = ["run_callback"]
 
 
-# def get_message(cls: type[Message], message: Message | RawMessage) -> Message:
-#     if isinstance(message, Message):
-#         return message
-#     res = cls.create(raw=message)
-#     if is_fail(res):
-#         raise ValidationFailed(errors=res.err.errors)
+async def run_callback(subscriber: Subscriber, message: Message | RawMessage) -> Result[t.Any]:
+    topic = message.name if isinstance(message, Message) else message.get("name")
+    try:
+        msg = get_message(subscriber.msg_type, message)
+        return await call_with_dependencies(subscriber.callback, {subscriber.msg_arg: msg})
+    except Error as err:
+        return fail(err=err)
+    except Exception as exc:
+        return fail(err=InternalError.from_exception(exc, extra={"subject": topic, "message": message}))
 
-#     return res.value
+
+def get_message(cls: type[Message], message: Message | RawMessage) -> Message:
+    if isinstance(message, Message):
+        return message
+    res = cls.create(raw=message)
+    if is_fail(res):
+        raise ValidationFailed(errors=res.err.errors)
+
+    return res.value
 
 
 # def is_subscribed(subscriber: Subscriber, message: Message | RawMessage) -> bool:

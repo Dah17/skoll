@@ -10,3 +10,4 @@ wheels/
 .venv
 .secrets
 .publish_key
+testing.py

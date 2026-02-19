@@ -42,8 +42,8 @@ class Error(Exception):
             "hints": self.hints,
             "trace_id": trace_id,
             "detail": self.detail,
-            "status": self.status,
             "debug": self.debug if public_view is False else None,
+            "status": self.status if public_view is False else None,
             "errors": [sub.serialize(public_view=public_view) for sub in self.errors],
         }
         return sanitize_dict(err_json)
@@ -75,7 +75,7 @@ class InternalError(Error):
     code: str = attrs.field(default="internal_error", init=False)
     hints: dict[str, t.Any] = attrs.field(factory=dict, init=False)
     status: ErrorStatusCode | None = attrs.field(default=500, init=False)
-    detail: str = attrs.field(default="An expected error occurred. Please try again later.", init=False)
+    detail: str = attrs.field(default="An unexpected error occurred. Please try again later.", init=False)
 
     @classmethod
     def from_exception(cls, exc: Exception, extra: dict[str, t.Any] | None = None) -> t.Self:

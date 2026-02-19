@@ -1,52 +1,135 @@
-# import nats
-# import typing as t
-# from skoll.domain import Message
-# from skoll.result import Result, ok
-# from skoll.config import NATSConfig
-# from skoll.application.types import RawMessage
-# from skoll.application import Mediator, Subscriber, Service
+import json
+import typing as t
+import collections.abc as c
+
+from nats.aio.msg import Msg
+from attrs import define, field
+from skoll.utils import default_ssl
+from nats.js import JetStreamContext
+from skoll.domain import Message, ID
+from skoll.errors import InternalError
+from skoll.application.types import RawMessage
+from skoll.result import Result, fail, ok, is_ok
+from nats.aio.client import Client as NatsClient
+from skoll.application import Mediator, Subscriber, Service
+from nats.aio.subscription import Subscription as NSubscription
+
+from .utils import run_callback
+
+__all__ = ["NatsMediator"]
 
 
-# __all__ = ["NATSMediator"]
+@define(kw_only=True, slots=True)
+class NatsMediator(Mediator):
+
+    creds: str
+    servers: list[str]
+    _js: JetStreamContext | None = None
+    nc: NatsClient = field(init=False, factory=lambda: NatsClient())
+    subscriptions: dict[str, list[NSubscription]] = field(factory=dict)
+
+    @property
+    def js(self) -> JetStreamContext:
+        if self._js is None:
+            raise InternalError(debug={"message": "JetStream context is not initialized"})
+        return self._js
+
+    @t.override
+    async def subscribe(self, service: Service) -> ID:
+        if not self.nc.is_connected:
+            raise InternalError(debug={"message": "Attempt to subscribe before nats client is connected"})
+        sub_id = ID.new()
+        subscribtions: list[NSubscription] = []
+        for subscriber in service.subscribers:
+            if subscriber.js_stream is not None:
+                sub = await self.js.subscribe(
+                    manual_ack=True,
+                    subject=subscriber.topic,
+                    stream=subscriber.js_stream,
+                    cb=wrap_callback(subscriber),
+                    durable=subscriber.service_name,
+                    queue=subscriber.service_name if subscriber.queued else None,
+                )
+            else:
+                sub = await self.nc.subscribe(
+                    subject=subscriber.topic,
+                    cb=wrap_callback(subscriber),
+                    queue=subscriber.service_name if subscriber.queued else "",
+                )
+            subscribtions.append(sub)
+        self.subscriptions[sub_id.value] = subscribtions
+        return sub_id
+
+    @t.override
+    async def unsubscribe(self, id: ID) -> None:
+        try:
+            subscriptions = self.subscriptions.get(id.value, [])
+            for sub in subscriptions:
+                await sub.unsubscribe(limit=0)
+            del self.subscriptions[id.value]
+        except Exception as e:
+            raise InternalError.from_exception(e)
+
+    @t.override
+    async def connect(self) -> bool:
+        try:
+            if self.nc.is_connected or self.nc.is_reconnecting:
+                return True
+            await self.nc.connect(
+                tls=default_ssl, servers=self.servers, max_reconnect_attempts=-1, user_credentials=self.creds
+            )
+            self._js = self.nc.jetstream()
+            return True
+        except Exception as e:
+            print(InternalError.from_exception(e).serialize())
+            return False
+
+    @t.override
+    async def disconnect(self) -> None:
+        """
+        Gracefully shut down the mediator.
+        This is better than close() because it allows in-flight
+        messages to finish processing.
+        """
+        if self.nc.is_connected:
+            # drain() implicitly calls close() at the very end
+            await self.nc.drain()
+            print("Mediator: All subscriptions drained and connection closed.")
+
+    @t.override
+    async def publish(self, msg: Message | RawMessage) -> None:
+        try:
+            subject, payload = (msg.name, msg.serialize()) if isinstance(msg, Message) else (msg["name"], msg)
+            await self.nc.publish(subject, json.dumps(payload).encode("utf-8"))
+        except Exception as e:
+            print(InternalError.from_exception(e).serialize())
+
+    @t.override
+    async def request(self, msg: Message | RawMessage) -> Result[t.Any]:
+        try:
+            subject, payload = (msg.name, msg.serialize()) if isinstance(msg, Message) else (msg["name"], msg)
+            res = await self.nc.request(subject, json.dumps(payload).encode("utf-8"), timeout=5)
+            return ok(json.loads(res.data.decode("utf-8")))
+        except TimeoutError as e:
+            return fail(InternalError.from_exception(e, extra={"message": f"Request timed out"}))
+        except Exception as e:
+            print(InternalError.from_exception(e).serialize())
+            return fail(InternalError.from_exception(e))
 
 
-# class NATSMediator(Mediator):
-#     """NATS mediator implementation."""
+def wrap_callback(subscriber: Subscriber[t.Any]) -> t.Callable[[Msg], c.Awaitable[None]]:
+    async def callback(msg: Msg):
+        try:
+            raw_msg: RawMessage = json.loads(msg.data.decode("utf-8"))
+            result = await run_callback(subscriber, raw_msg)
+            if subscriber.will_reply:
+                await msg.respond(json.dumps(result.value if is_ok(result) else result.err.serialize()).encode("utf-8"))
+            elif subscriber.js_stream is not None:
+                if is_ok(result):
+                    await msg.ack()
+                else:
+                    await msg.nak(delay=5)
+        except Exception as e:
+            print(InternalError.from_exception(e))
 
-#     seed: str
-#     urls: list[str]
-#     subscribers: list[Subscriber]
-#     handlers: dict[str, Subscriber]
-
-#     def __init__(self, config: NATSConfig) -> None:
-#         if config.urls is None or config.seed is None:
-#             raise ValueError("NATS URLs and seed are required")
-#         self.urls = config.urls.split(",")
-#         self.seed = config.seed
-#         self.handlers = {}
-#         self.subscribers = []
-
-#     @t.override
-#     def register(self, *services: Service) -> None:
-#         for service in services:
-#             for subscriber in service.subscribers:
-#                 if subscriber.with_reply:
-#                     self.handlers[subscriber.topic] = subscriber
-#                 else:
-#                     self.subscribers.append(subscriber)
-
-#     @t.override
-#     async def start(self) -> None:
-#         pass
-
-#     @t.override
-#     async def stop(self) -> None:
-#         pass
-
-#     @t.override
-#     async def publish(self, msg: Message | RawMessage) -> None:
-#         pass
-
-#     @t.override
-#     async def request(self, msg: Message | RawMessage) -> Result[t.Any]:
-#         return ok(None)
+    return callback
