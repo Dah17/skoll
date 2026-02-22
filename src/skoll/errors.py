@@ -17,7 +17,7 @@ __all__ = [
     "ValidationFailed",
 ]
 
-type ErrorStatusCode = t.Literal[500, 400, 401, 403, 404, 409]
+type ErrorStatusCode = t.Literal[400, 401, 403, 404, 405, 409, 429, 500, 502, 503, 504]
 
 
 @attrs.define(kw_only=True, slots=True)
@@ -31,21 +31,18 @@ class Error(Exception):
     debug: dict[str, t.Any] = attrs.field(factory=dict)
     hints: dict[str, t.Any] = attrs.field(factory=dict)
 
-    def serialize(
-        self,
-        public_view: bool = False,
-        trace_id: str | None = None,
-    ) -> dict[str, t.Any]:
+    def serialize(self, exclude: list[str] | None = None, extra: dict[str, t.Any] | None = None) -> dict[str, t.Any]:
+        exclude = exclude or []
         err_json: dict[str, t.Any] = {
             "code": self.code,
             "field": self.field,
-            "hints": self.hints,
-            "trace_id": trace_id,
             "detail": self.detail,
-            "debug": self.debug if public_view is False else None,
-            "status": self.status if public_view is False else None,
-            "errors": [sub.serialize(public_view=public_view) for sub in self.errors],
+            "debug": self.debug if "debug" not in exclude else None,
+            "hints": self.hints if "hints" not in exclude else None,
+            "errors": [sub.serialize(exclude=exclude) for sub in self.errors],
         }
+        if extra is not None:
+            err_json.update(extra)
         return sanitize_dict(err_json)
 
 
@@ -139,3 +136,28 @@ class Conflict(Error):
     field: str | None = attrs.field(default=None, init=False)
     status: ErrorStatusCode | None = attrs.field(default=409, init=False)
     detail: str = "Can not perform this operation since it will put the system in an inconsistent state"
+
+
+@attrs.define(kw_only=True, slots=True)
+class MissingSubscriber(NotFound):
+
+    attr: str | None = attrs.field(default=None, init=False)
+    code: str = attrs.field(default="missing_subscriber", init=False)
+    detail: str = attrs.field(default="No subscriber found for the given message subject", init=False)
+
+
+@attrs.define(kw_only=True, slots=True)
+class InvalidToken(Error):
+
+    attr: str | None = attrs.field(default=None, init=False)
+    code: str = attrs.field(default="invalid_token", init=False)
+    status: ErrorStatusCode | None = attrs.field(default=401, init=False)
+    detail: str = attrs.field(default="The provide token is not a valid token", init=False)
+
+
+@attrs.define(kw_only=True, slots=True)
+class ExpiredToken(InvalidToken):
+
+    attr: str | None = attrs.field(default=None, init=False)
+    code: str = attrs.field(default="expired_token", init=False)
+    detail: str = attrs.field(default="The provide token has expired", init=False)

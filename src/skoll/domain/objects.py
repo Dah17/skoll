@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing as t
 from datetime import timedelta
 from attrs import define, field
@@ -11,15 +9,12 @@ from skoll.domain.primitives import ID, PositiveInt, DateTime, Latitude, Longitu
 __all__ = [
     "Period",
     "Address",
-    "Message",
     "TimeSlot",
     "Coordinate",
     "EntityState",
     "RegularHours",
     "SpecialHours",
     "WorkingHours",
-    "MessageContext",
-    "MessagePayload",
 ]
 
 
@@ -130,47 +125,3 @@ class EntityState(Object):
         if "version" not in kwargs:
             kwargs["version"] = self.version.increment()
         return super().evolve(**kwargs)
-
-
-@define(frozen=True, kw_only=True, slots=True)
-class MessageContext(Object):
-
-    span_id: ID = field(factory=ID.new)
-    trace_id: ID = field(factory=ID.new)
-
-    @classmethod
-    def default(cls) -> t.Self:
-        return cls()
-
-
-@define(frozen=True, kw_only=True, slots=True)
-class MessagePayload(Object):
-
-    @classmethod
-    def default(cls) -> t.Self:
-        return cls()
-
-
-@define(frozen=True, kw_only=True, slots=True, eq=False)
-class Message(Object):
-
-    name: str
-    source: str
-    payload: MessagePayload
-    context: MessageContext
-    id: ID = field(factory=ID.new)
-    created_at: DateTime = field(factory=DateTime.now)
-
-    @t.override
-    def __eq__(self, other: t.Any) -> bool:
-        if not isinstance(other, self.__class__):
-            return False
-        return other.__hash__() == self.__hash__()
-
-    @t.override
-    def __ne__(self, other: t.Any) -> bool:
-        return not self == other
-
-    @t.override
-    def __hash__(self) -> int:
-        return hash(self.id.serialize())

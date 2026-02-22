@@ -1,8 +1,7 @@
-from __future__ import annotations
-
 import re
 import typing as t
 from attrs import define, field
+from zoneinfo import available_timezones
 from datetime import datetime, timedelta, UTC
 
 from skoll.errors import InvalidField
@@ -15,7 +14,19 @@ EMAIL_REGEX = r"^[^@]+@[^@]+$"
 TIME_REGEX = r"^(?:[01]?[0-9]|2[0-3]):[0-5][0-9]$"
 LOCALE_PATTERN = r"^[a-z]{2,3}(-[A-Z][a-z]{3})?(-[A-Z]{2}|-[0-9]{3})?$"
 
-__all__ = ["ID", "Time", "Email", "PositiveInt", "DateTime", "Latitude", "Longitude", "Locale", "LocalizedText"]
+__all__ = [
+    "ID",
+    "Map",
+    "Time",
+    "Email",
+    "Locale",
+    "Timezone",
+    "DateTime",
+    "Latitude",
+    "Longitude",
+    "PositiveInt",
+    "LocalizedText",
+]
 
 
 @define(kw_only=True, slots=True, frozen=True)
@@ -99,19 +110,19 @@ class DateTime(Object):
 
     def plus(
         self, days: int = 0, hours: int = 0, minutes: int = 0, seconds: int = 0, delta: timedelta | None = None
-    ) -> DateTime:
+    ) -> t.Self:
         new_date = (
             self.value + timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds) + (delta or timedelta())
         )
-        return DateTime(value=new_date)
+        return self.__class__(value=new_date)
 
     def minus(
         self, days: int = 0, hours: int = 0, minutes: int = 0, seconds: int = 0, delta: timedelta | None = None
-    ) -> DateTime:
+    ) -> t.Self:
         new_date = (
             self.value - timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds) - (delta or timedelta())
         )
-        return DateTime(value=new_date)
+        return self.__class__(value=new_date)
 
     def __gt__(self, other: t.Self) -> bool:
         return self.value > other.value
@@ -125,44 +136,44 @@ class DateTime(Object):
     def __le__(self, other: t.Self) -> bool:
         return self.value <= other.value
 
-    def reset_second(self):
+    def reset_second(self) -> t.Self:
         date = self.value.replace(second=0, microsecond=0)
-        return DateTime(value=date)
+        return self.__class__(value=date)
 
-    def reset_part(self, hour: bool = False, minute: bool = False):
+    def reset_part(self, hour: bool = False, minute: bool = False) -> t.Self:
         date = self.value.replace(second=0, microsecond=0)
 
         if hour:
             date = date.replace(hour=0, minute=0)
         elif minute:
             date = date.replace(minute=0)
-        return DateTime(value=date)
+        return self.__class__(value=date)
 
-    def to_tz(self, tz_str: str = "UTC") -> DateTime:
-        return DateTime.from_timestamp(int(self.value.timestamp() * 1000), tz_str=tz_str)
+    def to_tz(self, tz_str: str = "UTC") -> t.Self:
+        return self.__class__.from_timestamp(int(self.value.timestamp() * 1000), tz_str=tz_str)
 
     @classmethod
-    def today(cls, tz_str: str = "UTC") -> DateTime:
+    def today(cls, tz_str: str = "UTC") -> t.Self:
         tz = to_tz(tz_str)
         value = datetime.combine(datetime.now(tz=tz), datetime.min.time()).replace(tzinfo=tz)
         return cls.from_timestamp(int(value.timestamp() * 1000), tz_str=tz_str)
 
     @classmethod
-    def tomorrow(cls, tz_str: str = "UTC") -> DateTime:
+    def tomorrow(cls, tz_str: str = "UTC") -> t.Self:
         tz = to_tz(tz_str)
         value = datetime.combine(datetime.now(tz=tz) + timedelta(days=1), datetime.min.time()).replace(tzinfo=tz)
         return cls.from_timestamp(int(value.timestamp() * 1000), tz_str=tz_str)
 
     @classmethod
-    def now(cls, tz_str: str = "UTC") -> DateTime:
+    def now(cls, tz_str: str = "UTC") -> t.Self:
         tz = to_tz(tz_str)
         value = int(datetime.now(tz=tz).timestamp() * 1000)
         return cls.from_timestamp(value, tz_str=tz_str)
 
     @classmethod
-    def from_timestamp(cls, timestamp: int, tz_str: str = "UTC") -> DateTime:
+    def from_timestamp(cls, timestamp: int, tz_str: str = "UTC") -> t.Self:
         tz = to_tz(tz_str)
-        return DateTime(value=datetime.fromtimestamp(timestamp / 1000, tz=tz))
+        return cls(value=datetime.fromtimestamp(timestamp / 1000, tz=tz))
 
     @t.override
     @classmethod
@@ -255,7 +266,7 @@ class Email(Object):
         return self.value.split("@")[0]
 
     @classmethod
-    def anonymous(cls, id: ID) -> Email:
+    def anonymous(cls, id: ID) -> t.Self:
         return cls(value=f"{id.value}.no-reply@email.com")
 
     @t.override
@@ -276,6 +287,10 @@ class Email(Object):
 class Locale(Object):
 
     value: str
+
+    @classmethod
+    def default(cls) -> t.Self:
+        return cls(value="en-US")
 
     @t.override
     @classmethod
@@ -315,5 +330,55 @@ class LocalizedText(Object):
                     "expected": "Dictionaire<BCP47Locale, string>",
                     "example": {"en-US": "English", "en": "An example"},
                 },
+            )
+        )
+
+
+@define(kw_only=True, slots=True, frozen=True)
+class Map(Object):
+
+    value: dict[str, t.Any] = field(factory=dict)
+
+    @t.override
+    @classmethod
+    def prepare(cls, raw: t.Any) -> Result[t.Any]:
+        value = safe_call(dict, raw)
+        if value is not None:
+            return ok(t.cast(dict[str, t.Any], value))
+
+        return fail(
+            InvalidField(
+                field=to_snake_case(cls.__name__),
+                hints={"received": raw, "expected": "dict"},
+            )
+        )
+
+    @classmethod
+    def empty(cls) -> t.Self:
+        return cls(value={})
+
+
+@define(kw_only=True, slots=True, frozen=True)
+class Timezone(Object):
+
+    value: str
+
+    @classmethod
+    def default(cls) -> t.Self:
+        return cls(value="UTC")
+
+    @t.override
+    @classmethod
+    def prepare(cls, raw: t.Any) -> Result[t.Any]:
+        value = safe_call(str, raw)
+        value = value.strip() if value is not None else None
+
+        if value in available_timezones():
+            return ok(value)
+
+        return fail(
+            InvalidField(
+                field=to_snake_case(cls.__name__),
+                hints={"received": raw, "expected": "IANA Timezone (e.g., UTC, America/New_York)"},
             )
         )

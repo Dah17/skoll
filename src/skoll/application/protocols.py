@@ -3,7 +3,7 @@ import collections.abc as c
 
 from skoll.result import Result
 from skoll.application.types import *
-from skoll.domain import EntityState, Message, ID
+from skoll.domain import EntityState, Message, ID, RawMessage
 
 
 __all__ = ["DB", "Repository", "Mediator", "Authz"]

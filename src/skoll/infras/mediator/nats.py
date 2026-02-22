@@ -6,9 +6,8 @@ from nats.aio.msg import Msg
 from attrs import define, field
 from skoll.utils import default_ssl
 from nats.js import JetStreamContext
-from skoll.domain import Message, ID
 from skoll.errors import InternalError
-from skoll.application.types import RawMessage
+from skoll.domain import Message, ID, RawMessage
 from skoll.result import Result, fail, ok, is_ok
 from nats.aio.client import Client as NatsClient
 from skoll.application import Mediator, Subscriber, Service
@@ -86,15 +85,8 @@ class NatsMediator(Mediator):
 
     @t.override
     async def disconnect(self) -> None:
-        """
-        Gracefully shut down the mediator.
-        This is better than close() because it allows in-flight
-        messages to finish processing.
-        """
         if self.nc.is_connected:
-            # drain() implicitly calls close() at the very end
             await self.nc.drain()
-            print("Mediator: All subscriptions drained and connection closed.")
 
     @t.override
     async def publish(self, msg: Message | RawMessage) -> None:

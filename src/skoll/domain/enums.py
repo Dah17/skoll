@@ -12,6 +12,6 @@ class SortDirection(Enum):
 class EntityStatus(Enum):
 
     ACTIVE = "ACTIVE"
-    INACTIVE = "INACTIVE"
     DELETED = "DELETED"
+    INACTIVE = "INACTIVE"
     ARCHIVED = "ARCHIVED"

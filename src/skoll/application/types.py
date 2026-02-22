@@ -3,9 +3,8 @@ import collections.abc as c
 
 from attrs import define, field
 from skoll.result import Result
-from skoll.errors import NotFound
 from abc import ABC, abstractmethod
-from skoll.domain import ID, Message, DateTime
+from skoll.domain import ID, DateTime, Message
 from inspect import iscoroutinefunction, signature
 
 
@@ -14,10 +13,8 @@ __all__ = [
     "Criteria",
     "ListPage",
     "Subscriber",
-    "RawMessage",
     "ListCriteria",
     "AuthzWriteChange",
-    "MissingSubscriber",
     "AuthzPrecondition",
     "AuthzLookupResult",
     "SubscriberCallback",
@@ -67,15 +64,6 @@ class AuthzLookupResult(t.NamedTuple):
     cursor: str | None = None
 
 
-class RawMessage(t.TypedDict):
-    name: str
-    source: str
-    id: t.NotRequired[str]
-    created_at: t.NotRequired[int]
-    payload: t.NotRequired[dict[str, t.Any]]
-    context: t.NotRequired[dict[str, t.Any]]
-
-
 @define(frozen=True, kw_only=True, slots=True)
 class Subscriber[T: Message]:
 
@@ -87,14 +75,6 @@ class Subscriber[T: Message]:
     msg_type: type[Message]
     js_stream: str | None = None
     callback: SubscriberCallback[T]
-
-
-@define(kw_only=True, slots=True)
-class MissingSubscriber(NotFound):
-
-    attr: str | None = field(default=None, init=False)
-    code: str = field(default="missing_subscriber", init=False)
-    detail: str = "No subscriber found for the given message subject"
 
 
 @define(kw_only=True, slots=True, frozen=True)
