@@ -3,58 +3,71 @@ import jwt
 import typing as t
 
 from calendar import timegm
+from attrs import define, field
 from skoll.errors import InternalError
 from skoll.result import Result, fail, ok
 from datetime import datetime as dt, timedelta, UTC
 
 
-__all__ = ["DecodedJwtToken", "encode_jwt_token", "decode_jwt_token"]
-
-
-ALGO = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_HASH_SECRET = os.getenv("JWT_HASH_SECRET", "")
-JWT_TOKEN_ISSUER = os.getenv("JWT_TOKEN_ISSUER", "")
-JWT_TOKEN_AUDIENCE = os.getenv("JWT_TOKEN_AUDIENCE", "")
-JWT_ACCESS_TOKEN_DURATION = int(os.getenv("JWT_ACCESS_TOKEN_DURATION_MIN", "1"))
-JWT_REFRESH_TOKEN_DURATION = int(os.getenv("JWT_REFRESH_TOKEN_DURATION_DAY", "1"))
+__all__ = ["DecodedJwtToken", "JwtConfig", "JwtToken"]
 
 
 class DecodedJwtToken(t.NamedTuple):
 
     expired: bool = False
     invalid: bool = False
-    data: dict[str, t.Any] | None = None
+    sub: str | None = None
+    kind: str | None = None
+    extra: dict[str, t.Any] | None = None
 
 
-def encode_jwt_token(sub: str, duration: int, **kwargs: t.Any) -> Result[str]:
-    try:
-        iat = dt.now(tz=UTC)
-        exp = iat + timedelta(seconds=duration)
-        payload = {
-            **kwargs,
-            "sub": sub,
-            "iss": JWT_TOKEN_ISSUER,
-            "aud": JWT_TOKEN_AUDIENCE,
-            "exp": timegm(exp.utctimetuple()),
-            "iat": timegm(iat.utctimetuple()),
-        }
-        return ok(value=jwt.encode(payload=payload, key=JWT_HASH_SECRET, algorithm=ALGO))
-    except Exception as e:
-        return fail(err=InternalError.from_exception(e))
+@define(frozen=True, slots=True, kw_only=True)
+class JwtConfig:
+
+    issuer: str = field(factory=lambda: os.getenv("JWT_TOKEN_ISSUER", ""))
+    encode_key: str = field(factory=lambda: os.getenv("JWT_HASH_SECRET", ""))
+    decode_key: str = field(factory=lambda: os.getenv("JWT_HASH_SECRET", ""))
+    audience: str = field(factory=lambda: os.getenv("JWT_TOKEN_AUDIENCE", ""))
+    algorithm: str = field(factory=lambda: os.getenv("JWT_ALGORITHM", "HS256"))
 
 
-def decode_jwt_token(token: str) -> DecodedJwtToken:
-    try:
-        params: dict[str, t.Any] = {
-            "jwt": token,
-            "algorithms": [ALGO],
-            "key": JWT_HASH_SECRET,
-            "issuer": JWT_TOKEN_ISSUER,
-            "audience": JWT_TOKEN_AUDIENCE,
-        }
-        data = jwt.decode(**params)
-        return DecodedJwtToken(data=data)
-    except jwt.ExpiredSignatureError:
-        return DecodedJwtToken(expired=True)
-    except Exception:
-        return DecodedJwtToken(invalid=True)
+@define(frozen=True, slots=True, kw_only=True)
+class JwtToken:
+
+    config: JwtConfig = field(factory=lambda: JwtConfig())
+
+    def new(self, sub: str, kind: str, duration_min: int, extra: dict[str, t.Any] | None = None) -> Result[str]:
+        try:
+            iat = dt.now(tz=UTC)
+            exp = iat + timedelta(minutes=duration_min)
+            payload = {
+                "sub": sub,
+                "kind": kind,
+                "extra": extra or {},
+                "iss": self.config.issuer,
+                "aud": self.config.audience,
+                "exp": timegm(exp.utctimetuple()),
+                "iat": timegm(iat.utctimetuple()),
+            }
+            return ok(value=jwt.encode(payload=payload, key=self.config.encode_key, algorithm=self.config.algorithm))
+        except Exception as e:
+            return fail(err=InternalError.from_exception(e))
+
+    def decode(self, token: str, kind: str) -> DecodedJwtToken:
+        try:
+            params: dict[str, t.Any] = {
+                "jwt": token,
+                "issuer": self.config.issuer,
+                "key": self.config.decode_key,
+                "audience": self.config.audience,
+                "algorithms": [self.config.algorithm],
+            }
+            payload = jwt.decode(**params)
+            kind, sub, extra = payload.get("kind", ""), payload.get("sub", ""), payload.get("extra", {})
+            if kind != kind or not sub:
+                return DecodedJwtToken(invalid=True)
+            return DecodedJwtToken(sub=sub, kind=kind, extra=extra)
+        except jwt.ExpiredSignatureError:
+            return DecodedJwtToken(expired=True)
+        except Exception:
+            return DecodedJwtToken(invalid=True)
