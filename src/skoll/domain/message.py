@@ -33,12 +33,20 @@ class RawMsgClient(t.TypedDict):
     device: t.NotRequired[RawMsgClientDevice]
 
 
+class RawMsgContext(t.TypedDict):
+    user_id: t.NotRequired[str]
+    span_id: t.NotRequired[str]
+    trace_id: t.NotRequired[str]
+    client: t.NotRequired[RawMsgClient]
+    extra: t.NotRequired[dict[str, t.Any]]
+
+
 class RawMessage(t.TypedDict):
     name: str
     source: str
     id: t.NotRequired[str]
     created_at: t.NotRequired[int]
-    context: t.NotRequired[RawMsgClient]
+    context: t.NotRequired[RawMsgContext]
     payload: t.NotRequired[dict[str, t.Any]]
 
 

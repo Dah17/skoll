@@ -9,7 +9,7 @@ from skoll.result import Result, fail, ok
 from datetime import datetime as dt, timedelta, UTC
 
 
-__all__ = ["DecodedJwtToken", "JwtConfig", "JwtToken"]
+__all__ = ["DecodedJwtToken", "JwtConfig"]
 
 
 class DecodedJwtToken(t.NamedTuple):
@@ -31,43 +31,44 @@ class JwtConfig:
     algorithm: str = field(factory=lambda: os.getenv("JWT_ALGORITHM", "HS256"))
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class JwtToken:
+DEFAULT_CONFIG = JwtConfig()
 
-    config: JwtConfig = field(factory=lambda: JwtConfig())
 
-    def new(self, sub: str, kind: str, duration_min: int, extra: dict[str, t.Any] | None = None) -> Result[str]:
-        try:
-            iat = dt.now(tz=UTC)
-            exp = iat + timedelta(minutes=duration_min)
-            payload = {
-                "sub": sub,
-                "kind": kind,
-                "extra": extra or {},
-                "iss": self.config.issuer,
-                "aud": self.config.audience,
-                "exp": timegm(exp.utctimetuple()),
-                "iat": timegm(iat.utctimetuple()),
-            }
-            return ok(value=jwt.encode(payload=payload, key=self.config.encode_key, algorithm=self.config.algorithm))
-        except Exception as e:
-            return fail(err=InternalError.from_exception(e))
+def create_jwt_token(
+    sub: str, kind: str, duration_min: int, extra: dict[str, t.Any] | None = None, config: JwtConfig = DEFAULT_CONFIG
+) -> Result[str]:
+    try:
+        iat = dt.now(tz=UTC)
+        exp = iat + timedelta(minutes=duration_min)
+        payload = {
+            "sub": sub,
+            "kind": kind,
+            "extra": extra or {},
+            "iss": config.issuer,
+            "aud": config.audience,
+            "exp": timegm(exp.utctimetuple()),
+            "iat": timegm(iat.utctimetuple()),
+        }
+        return ok(value=jwt.encode(payload=payload, key=config.encode_key, algorithm=config.algorithm))
+    except Exception as e:
+        return fail(err=InternalError.from_exception(e))
 
-    def decode(self, token: str, kind: str) -> DecodedJwtToken:
-        try:
-            params: dict[str, t.Any] = {
-                "jwt": token,
-                "issuer": self.config.issuer,
-                "key": self.config.decode_key,
-                "audience": self.config.audience,
-                "algorithms": [self.config.algorithm],
-            }
-            payload = jwt.decode(**params)
-            kind, sub, extra = payload.get("kind", ""), payload.get("sub", ""), payload.get("extra", {})
-            if kind != kind or not sub:
-                return DecodedJwtToken(invalid=True)
-            return DecodedJwtToken(sub=sub, kind=kind, extra=extra)
-        except jwt.ExpiredSignatureError:
-            return DecodedJwtToken(expired=True)
-        except Exception:
+
+def decode_jwt_token(token: str, kind: str, config: JwtConfig = DEFAULT_CONFIG) -> DecodedJwtToken:
+    try:
+        params: dict[str, t.Any] = {
+            "jwt": token,
+            "issuer": config.issuer,
+            "key": config.decode_key,
+            "audience": config.audience,
+            "algorithms": [config.algorithm],
+        }
+        payload = jwt.decode(**params)
+        kind, sub, extra = payload.get("kind", ""), payload.get("sub", ""), payload.get("extra", {})
+        if kind != kind or not sub:
             return DecodedJwtToken(invalid=True)
+        return DecodedJwtToken(sub=sub, kind=kind, extra=extra)
+    except jwt.ExpiredSignatureError:
+        return DecodedJwtToken(expired=True)
+    except Exception:
+        return DecodedJwtToken(invalid=True)
