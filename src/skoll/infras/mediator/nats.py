@@ -70,18 +70,17 @@ class NatsMediator(Mediator):
             raise InternalError.from_exception(e)
 
     @t.override
-    async def connect(self) -> bool:
+    async def connect(self) -> None:
         try:
             if self.nc.is_connected or self.nc.is_reconnecting:
-                return True
+                return None
             await self.nc.connect(
                 tls=default_ssl, servers=self.servers, max_reconnect_attempts=-1, user_credentials=self.creds
             )
             self._js = self.nc.jetstream()
-            return True
+            return None
         except Exception as e:
-            print(InternalError.from_exception(e).serialize())
-            return False
+            raise InternalError.from_exception(e)
 
     @t.override
     async def disconnect(self) -> None:
