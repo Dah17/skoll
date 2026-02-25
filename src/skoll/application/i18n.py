@@ -3,6 +3,9 @@ from json import load
 from skoll.domain import Locale
 
 
+__all__ = ["I18N"]
+
+
 class I18N:
 
     base_path: str

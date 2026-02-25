@@ -7,11 +7,11 @@ from skoll.domain.primitives import ID, PositiveInt, DateTime, Latitude, Longitu
 
 
 __all__ = [
+    "Entity",
     "Period",
     "Address",
     "TimeSlot",
     "Coordinate",
-    "EntityState",
     "RegularHours",
     "SpecialHours",
     "WorkingHours",
@@ -97,7 +97,7 @@ class WorkingHours(Object):
 
 
 @define(kw_only=True, slots=True, frozen=True, eq=False)
-class EntityState(Object):
+class Entity(Object):
 
     id: ID = field(factory=ID.new)
     created_at: DateTime = field(factory=DateTime.now)

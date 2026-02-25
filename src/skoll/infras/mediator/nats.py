@@ -88,12 +88,10 @@ class NatsMediator(Mediator):
             await self.nc.drain()
 
     @t.override
-    async def publish(self, msg: Message | RawMessage) -> None:
-        try:
-            subject, payload = (msg.name, msg.serialize()) if isinstance(msg, Message) else (msg["name"], msg)
+    async def publish(self, *msg: Message | RawMessage) -> None:
+        for m in msg:
+            subject, payload = (m.name, m.serialize()) if isinstance(m, Message) else (m["name"], m)
             await self.nc.publish(subject, json.dumps(payload).encode("utf-8"))
-        except Exception as e:
-            print(InternalError.from_exception(e).serialize())
 
     @t.override
     async def request(self, msg: Message | RawMessage) -> Result[t.Any]:
@@ -104,7 +102,6 @@ class NatsMediator(Mediator):
         except TimeoutError as e:
             return fail(InternalError.from_exception(e, extra={"message": f"Request timed out"}))
         except Exception as e:
-            print(InternalError.from_exception(e).serialize())
             return fail(InternalError.from_exception(e))
 
 

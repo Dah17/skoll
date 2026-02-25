@@ -5,11 +5,12 @@ import typing as t
 from calendar import timegm
 from attrs import define, field
 from skoll.errors import InternalError
+from skoll.utils import get_config_var
 from skoll.result import Result, fail, ok
 from datetime import datetime as dt, timedelta, UTC
 
 
-__all__ = ["DecodedJwtToken", "JwtConfig"]
+__all__ = ["DecodedJwtToken", "JwtConfig", "create_jwt_token", "decode_jwt_token"]
 
 
 class DecodedJwtToken(t.NamedTuple):
@@ -24,11 +25,11 @@ class DecodedJwtToken(t.NamedTuple):
 @define(frozen=True, slots=True, kw_only=True)
 class JwtConfig:
 
-    issuer: str = field(factory=lambda: os.getenv("JWT_TOKEN_ISSUER", ""))
-    encode_key: str = field(factory=lambda: os.getenv("JWT_HASH_SECRET", ""))
-    decode_key: str = field(factory=lambda: os.getenv("JWT_HASH_SECRET", ""))
-    audience: str = field(factory=lambda: os.getenv("JWT_TOKEN_AUDIENCE", ""))
-    algorithm: str = field(factory=lambda: os.getenv("JWT_ALGORITHM", "HS256"))
+    issuer: str = field(factory=get_config_var(keys=["JWT_TOKEN_ISSUER"], default=""))
+    encode_key: str = field(factory=get_config_var(keys=["JWT_HASH_SECRET"], default=""))
+    decode_key: str = field(factory=get_config_var(keys=["JWT_HASH_SECRET"], default=""))
+    audience: str = field(factory=get_config_var(keys=["JWT_TOKEN_AUDIENCE"], default=""))
+    algorithm: str = field(factory=get_config_var(keys=["JWT_ALGORITHM"], default="HS256"))
 
 
 DEFAULT_CONFIG = JwtConfig()

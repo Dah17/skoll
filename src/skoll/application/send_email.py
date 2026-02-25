@@ -1,19 +1,23 @@
 from aiosmtplib import send
 from attrs import define, field
 from email.mime.text import MIMEText
+from os import environ as os_environ
 from certifi import where as ssl_where
-from os import environ as os_environ, getenv
+from skoll.utils import get_config_var
+
+
+__all__ = ["SMTPConfig", "send_email"]
 
 
 @define(kw_only=True, slots=True, frozen=True)
 class SMTPConfig:
 
-    host: str = field(factory=lambda: getenv("SMTP_HOST", ""))
-    user: str = field(factory=lambda: getenv("SMTP_USER", ""))
-    port: int = field(factory=lambda: int(getenv("SMTP_PORT", 465)))
-    password: str = field(factory=lambda: getenv("SMTP_PASSWORD", ""))
-    sender_name: str = field(factory=lambda: getenv("SMTP_SENDER_NAME", ""))
-    sender_email: str = field(factory=lambda: getenv("SMTP_SENDER_EMAIL", ""))
+    host: str = field(factory=get_config_var(keys=["SMTP_HOST"], default=""))
+    user: str = field(factory=get_config_var(keys=["SMTP_USER"], default=""))
+    port: int = field(factory=get_config_var(keys=["SMTP_PORT"], default=465))
+    password: str = field(factory=get_config_var(keys=["SMTP_PASSWORD"], default=""))
+    sender_name: str = field(factory=get_config_var(keys=["SMTP_SENDER_NAME"], default=""))
+    sender_email: str = field(factory=get_config_var(keys=["SMTP_SENDER_EMAIL"], default=""))
 
 
 DEFAULT_CONFIG = SMTPConfig()

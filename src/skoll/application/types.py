@@ -37,7 +37,7 @@ class SQLCriteria(t.NamedTuple):
 @define(frozen=True, kw_only=True, slots=True)
 class Criteria(ABC):
 
-    uid: ID | None = None
+    id: ID | None = None
 
     @property
     @abstractmethod
@@ -49,7 +49,7 @@ class Criteria(ABC):
 class ListCriteria(Criteria, ABC):
 
     cursor: str | None = None
-    limit: int = field(default=100)
+    limit: int = field(default=150)
 
 
 type AuthzWriteOperation = t.Literal["SET", "DELETE"]
@@ -60,7 +60,7 @@ type SubscriberCallback[T: Message] = t.Callable[t.Concatenate[T, ...], c.Corout
 
 
 class AuthzLookupResult(t.NamedTuple):
-    uids: list[str]
+    ids: list[str]
     cursor: str | None = None
 
 

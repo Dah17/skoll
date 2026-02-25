@@ -192,16 +192,16 @@ def impartial(func: t.Callable[..., t.Any]) -> t.Callable[..., t.Any]:
     return func
 
 
-def get_config_var(keys: list[str], default: str | None = None) -> t.Callable[[], str | None]:
+def get_config_var[T](keys: list[str], default: T) -> t.Callable[[], T]:
 
-    def get_var() -> str | None:
+    def get_var() -> T:
         for key in keys:
             if "/" in key:
                 with open(key, "r") as f:
-                    return f.read().strip()
+                    return t.cast(T, f.read().strip())
             value = os.getenv(key)
             if value:
-                return value
+                return t.cast(T, value)
         return default
 
     return get_var

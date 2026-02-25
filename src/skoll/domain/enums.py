@@ -1,6 +1,6 @@
 from .base import Enum
 
-__all__ = ["SortDirection", "EntityStatus"]
+__all__ = ["SortDirection", "Status"]
 
 
 class SortDirection(Enum):
@@ -9,7 +9,7 @@ class SortDirection(Enum):
     DESCENDING = "DESC"
 
 
-class EntityStatus(Enum):
+class Status(Enum):
 
     ACTIVE = "ACTIVE"
     DELETED = "DELETED"

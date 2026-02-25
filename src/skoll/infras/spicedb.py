@@ -4,8 +4,8 @@ from attrs import define
 from re import match as re_match
 from aiohttp import ClientSession
 
+from skoll.errors import Forbidden
 from skoll.utils import sanitize_dict
-from skoll.errors import Forbidden, InternalError
 from skoll.application import AuthzWriteChange, AuthzPrecondition, AuthzLookupResult, Authz
 
 
@@ -85,7 +85,7 @@ class SpiceDBAuthz(Authz):
                 lines = [loads(line) for line in (await response.text()).split("\n")[:-1]]
                 id_key = "resourceObjectId" if tuple_obj.subject_id is not None else "subjectObjectId"
                 return AuthzLookupResult(
-                    uids=[line.get("result", {}).get(id_key, "") for line in lines],
+                    ids=[line.get("result", {}).get(id_key, "") for line in lines],
                     cursor=lines[-1].get("result", {}).get("afterResultCursor", {}).get("token"),
                 )
 

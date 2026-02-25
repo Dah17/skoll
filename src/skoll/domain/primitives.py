@@ -4,8 +4,8 @@ from attrs import define, field
 from zoneinfo import available_timezones
 from datetime import datetime, timedelta, UTC
 
-from skoll.errors import InvalidField
 from skoll.domain.base import Object
+from skoll.errors import InvalidField
 from skoll.result import Result, ok, fail
 from skoll.utils import new_ulid, to_tz, to_snake_case, safe_call
 

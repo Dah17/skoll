@@ -95,7 +95,7 @@ class MsgContext(Object):
 class MsgPayload(Object):
 
     @classmethod
-    def default(cls) -> t.Self:
+    def empty(cls) -> t.Self:
         return cls()
 
 
@@ -104,9 +104,9 @@ class Message(Object):
 
     name: str
     source: str
+    payload: MsgPayload
     id: ID = field(factory=ID.new)
     created_at: DateTime = field(factory=DateTime.now)
-    payload: MsgPayload = field(factory=MsgPayload.default)
     context: MsgContext = field(factory=MsgContext.default)
 
     @t.override

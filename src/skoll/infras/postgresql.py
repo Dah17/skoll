@@ -1,12 +1,12 @@
 import os
 import typing as t
-import collections.abc as c
 
 from json import dumps
 from attrs import define
+from skoll.domain import Entity
 from skoll.utils import from_json
-from skoll.domain import EntityState
 from skoll.result import Result, is_fail
+from contextlib import asynccontextmanager
 from asyncpg.pool import Pool, PoolConnectionProxy
 from skoll.errors import InternalError, NotFound, Conflict
 from asyncpg import Record, create_pool, UniqueViolationError
@@ -55,23 +55,25 @@ class PostgresDB(DB[PoolConnectionProxy]):
             self.__pool = None
 
     @t.override
-    async def session(self) -> c.AsyncGenerator[PoolConnectionProxy]:
+    @asynccontextmanager
+    async def session(self):
         if self.__pool is None:
             raise RuntimeError("Database pool is not initialized.")
         async with self.__pool.acquire() as conn:
-            yield conn
+            yield t.cast(PoolConnectionProxy, conn)
 
     @t.override
-    async def transaction(self) -> c.AsyncGenerator[PoolConnectionProxy]:
+    @asynccontextmanager
+    async def transaction(self):
         if self.__pool is None:
             raise RuntimeError("Database pool is not initialized.")
         async with self.__pool.acquire() as conn:
             async with conn.transaction():
-                yield conn
+                yield t.cast(PoolConnectionProxy, conn)
 
 
 @define(kw_only=True, frozen=True, slots=True)
-class PostgresRepo[T: EntityState](Repository[T]):
+class PostgresRepo[T: Entity](Repository[T]):
 
     table: str
     conn: PoolConnectionProxy
@@ -148,10 +150,10 @@ class PostgresRepo[T: EntityState](Repository[T]):
         return sql_stm, params
 
     def __prepare_update(self, raw: dict[str, t.Any]):
-        params = [raw["uid"], raw["version"] - 1]
+        params = [raw["id"], raw["version"] - 1]
         changes: list[str] = []
         for idx, kv in enumerate(raw.items()):
             changes.append(f"{kv[0]} = ${idx + 3}")
             params.append(dumps(kv[1]) if isinstance(kv[1], (dict, list)) else kv[1])
-        sql_stm = f"UPDATE {self.table} SET {", ".join(changes)} WHERE uid = $1 AND version = $2"
+        sql_stm = f"UPDATE {self.table} SET {", ".join(changes)} WHERE id = $1 AND version = $2"
         return sql_stm, params
