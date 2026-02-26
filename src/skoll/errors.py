@@ -15,6 +15,8 @@ __all__ = [
     "InternalError",
     "Unauthenticated",
     "ValidationFailed",
+    "InvalidRequestPath",
+    "HttpMethodNotAllowed",
 ]
 
 type ErrorStatusCode = t.Literal[400, 401, 403, 404, 405, 409, 429, 500, 502, 503, 504]
@@ -127,6 +129,22 @@ class NotFound(Error):
     field: str | None = attrs.field(default=None, init=False)
     status: ErrorStatusCode | None = attrs.field(default=404, init=False)
     detail: str = attrs.field(default="There is no resource corresponding to your request", init=False)
+
+
+@attrs.define(kw_only=True, slots=True)
+class InvalidRequestPath(NotFound):
+
+    code: str = attrs.field(default="invalid_request_path", init=False)
+    detail: str = "The requested path in the url is not available on the server."
+
+
+@attrs.define(kw_only=True, slots=True)
+class HttpMethodNotAllowed(Error):
+
+    field: str | None = attrs.field(default=None, init=False)
+    code: str = attrs.field(default="http_method_not_allowed", init=False)
+    status: ErrorStatusCode | None = attrs.field(default=405, init=False)
+    detail: str = "The requested http method is not allowed for the specified path."
 
 
 @attrs.define(kw_only=True, slots=True)

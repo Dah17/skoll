@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, UTC
 from skoll.domain.base import Object
 from skoll.errors import InvalidField
 from skoll.result import Result, ok, fail
+from skoll.constants import CURRENCIES, COUNTRY_CODES
 from skoll.utils import new_ulid, to_tz, to_snake_case, safe_call
 
 ID_REGEX = r"^[0-9a-z]{26}$"
@@ -22,8 +23,10 @@ __all__ = [
     "Locale",
     "Timezone",
     "DateTime",
+    "Currency",
     "Latitude",
     "Longitude",
+    "CountryCode",
     "PositiveInt",
     "LocalizedText",
 ]
@@ -380,5 +383,45 @@ class Timezone(Object):
             InvalidField(
                 field=to_snake_case(cls.__name__),
                 hints={"received": raw, "expected": "IANA Timezone (e.g., UTC, America/New_York)"},
+            )
+        )
+
+
+@define(kw_only=True, slots=True, frozen=True)
+class Currency(Object):
+
+    value: str
+
+    @t.override
+    @classmethod
+    def prepare(cls, raw: t.Any) -> Result[t.Any]:
+        value = (safe_call(str, raw) or "").upper()
+
+        if value in CURRENCIES:
+            return ok(value)
+        return fail(
+            InvalidField(
+                field=to_snake_case(cls.__name__),
+                hints={"received": raw, "expected": "Currency (e.g., EUR, USD)"},
+            )
+        )
+
+
+@define(kw_only=True, slots=True, frozen=True)
+class CountryCode(Object):
+
+    value: str
+
+    @t.override
+    @classmethod
+    def prepare(cls, raw: t.Any) -> Result[t.Any]:
+        value = (safe_call(str, raw) or "").upper()
+
+        if value in COUNTRY_CODES:
+            return ok(value)
+        return fail(
+            InvalidField(
+                field=to_snake_case(cls.__name__),
+                hints={"received": raw, "expected": "Country Code (e.g., US, UK)"},
             )
         )
