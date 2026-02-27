@@ -44,9 +44,9 @@ class ID(Object):
     @t.override
     @classmethod
     def prepare(cls, raw: t.Any) -> Result[t.Any]:
-        value = safe_call(str, raw)
-        if value is not None and re.fullmatch(ID_REGEX, value.strip()) is not None:
-            return ok(value.strip())
+        value = (safe_call(str, raw) or "").strip()
+        if value and re.fullmatch(ID_REGEX, value) is not None:
+            return ok(value)
         return fail(
             InvalidField(
                 field=to_snake_case(cls.__name__),
@@ -247,9 +247,9 @@ class Time(Object):
     @t.override
     @classmethod
     def prepare(cls, raw: t.Any) -> Result[t.Any]:
-        value = safe_call(str, raw)
-        if value is not None and re.fullmatch(TIME_REGEX, value.strip()) is not None:
-            return ok(value.strip())
+        value = (safe_call(str, raw) or "").strip()
+        if value and re.fullmatch(TIME_REGEX, value) is not None:
+            return ok(value)
 
         return fail(
             InvalidField(
@@ -269,15 +269,15 @@ class Email(Object):
         return self.value.split("@")[0]
 
     @classmethod
-    def anonymous(cls, id: ID) -> t.Self:
-        return cls(value=f"{id.value}.no-reply@email.com")
+    def anonymous(cls) -> t.Self:
+        return cls(value=f"{new_ulid()}.anonymous@skoll.com")
 
     @t.override
     @classmethod
     def prepare(cls, raw: t.Any) -> Result[t.Any]:
-        value = safe_call(str, raw)
-        if value is not None and re.fullmatch(EMAIL_REGEX, value.strip()) is not None:
-            return ok(value.strip().lower())
+        value = (safe_call(str, raw) or "").strip()
+        if value and re.fullmatch(EMAIL_REGEX, value) is not None:
+            return ok(value)
         return fail(
             InvalidField(
                 field=to_snake_case(cls.__name__),
@@ -298,9 +298,9 @@ class Locale(Object):
     @t.override
     @classmethod
     def prepare(cls, raw: t.Any) -> Result[t.Any]:
-        value = safe_call(str, raw)
-        if value is not None and re.fullmatch(LOCALE_PATTERN, value.strip()) is not None:
-            return ok(value.strip().lower())
+        value = (safe_call(str, raw) or "").strip()
+        if value and re.fullmatch(LOCALE_PATTERN, value) is not None:
+            return ok(value)
         return fail(
             InvalidField(
                 field=to_snake_case(cls.__name__),

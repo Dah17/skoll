@@ -13,6 +13,7 @@ __all__ = [
     "MsgContext",
     "MsgPayload",
     "RawMsgClient",
+    "RawMsgContext",
     "MsgClientDevice",
     "RawMsgClientDevice",
 ]

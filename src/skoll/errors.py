@@ -33,6 +33,11 @@ class Error(Exception):
     debug: dict[str, t.Any] = attrs.field(factory=dict)
     hints: dict[str, t.Any] = attrs.field(factory=dict)
 
+    @classmethod
+    def from_dict(cls, err: dict[str, t.Any]) -> t.Self:
+        err["errors"] = [Error.from_dict(sub) for sub in err.get("errors", [])]
+        return cls(**err)
+
     def serialize(self, exclude: list[str] | None = None, extra: dict[str, t.Any] | None = None) -> dict[str, t.Any]:
         exclude = exclude or []
         err_json: dict[str, t.Any] = {

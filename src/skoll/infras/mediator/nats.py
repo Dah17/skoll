@@ -6,7 +6,7 @@ from nats.aio.msg import Msg
 from attrs import define, field
 from skoll.utils import default_ssl
 from nats.js import JetStreamContext
-from skoll.errors import InternalError
+from skoll.errors import InternalError, Error
 from skoll.domain import Message, ID, RawMessage
 from skoll.result import Result, fail, ok, is_ok
 from nats.aio.client import Client as NatsClient
@@ -97,8 +97,11 @@ class NatsMediator(Mediator):
     async def request(self, msg: Message | RawMessage) -> Result[t.Any]:
         try:
             subject, payload = (msg.name, msg.serialize()) if isinstance(msg, Message) else (msg["name"], msg)
-            res = await self.nc.request(subject, json.dumps(payload).encode("utf-8"), timeout=5)
-            return ok(json.loads(res.data.decode("utf-8")))
+            response = await self.nc.request(subject, json.dumps(payload).encode("utf-8"), timeout=5)
+            raw_msg = json.loads(response.data.decode("utf-8"))
+            if raw_msg.get("error") is not None:
+                return fail(Error.from_dict(raw_msg["error"]))
+            return ok(raw_msg.get("data"))
         except TimeoutError as e:
             return fail(InternalError.from_exception(e, extra={"message": f"Request timed out"}))
         except Exception as e:
@@ -111,7 +114,11 @@ def wrap_callback(subscriber: Subscriber[t.Any]) -> t.Callable[[Msg], c.Awaitabl
             raw_msg: RawMessage = json.loads(msg.data.decode("utf-8"))
             result = await run_callback(subscriber, raw_msg)
             if subscriber.will_reply:
-                await msg.respond(json.dumps(result.value if is_ok(result) else result.err.serialize()).encode("utf-8"))
+                raw_response = {
+                    "data": result.value if is_ok(result) else None,
+                    "error": result.err.serialize() if not is_ok(result) else None,
+                }
+                await msg.respond(json.dumps(raw_response).encode("utf-8"))
             elif subscriber.js_stream is not None:
                 if is_ok(result):
                     await msg.ack()
