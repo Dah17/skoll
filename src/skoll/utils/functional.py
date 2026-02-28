@@ -28,6 +28,7 @@ __all__ = [
     "get_config_var",
     "string_to_snake",
     "string_to_camel",
+    "names_from_email",
     "to_context_manager",
 ]
 

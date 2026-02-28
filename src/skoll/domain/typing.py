@@ -9,6 +9,7 @@ from .primitives import ID, DateTime
 __all__ = [
     "Criteria",
     "ListPage",
+    "SQLCriteria",
     "ListCriteria",
     "DecodedJwtToken",
     "AuthzWriteChange",

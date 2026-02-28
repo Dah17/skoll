@@ -10,11 +10,14 @@ __all__ = [
     "Conflict",
     "Forbidden",
     "BadRequest",
+    "InvalidToken",
+    "ExpiredToken",
     "InvalidField",
     "MissingField",
     "InternalError",
     "Unauthenticated",
     "ValidationFailed",
+    "RateLimitExceeded",
     "InvalidRequestPath",
     "HttpMethodNotAllowed",
 ]
@@ -184,3 +187,11 @@ class ExpiredToken(InvalidToken):
     attr: str | None = attrs.field(default=None, init=False)
     code: str = attrs.field(default="expired_token", init=False)
     detail: str = attrs.field(default="The provide token has expired", init=False)
+
+
+@attrs.define(kw_only=True, slots=True)
+class RateLimitExceeded(Error):
+
+    code: str = attrs.field(default="rate_limit_exceeded", init=False)
+    status: ErrorStatusCode | None = attrs.field(default=429, init=False)
+    detail: str = attrs.field(default="You are making too many requests. Please try again later", init=False)
