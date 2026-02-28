@@ -4,16 +4,15 @@ import collections.abc as c
 
 from nats.aio.msg import Msg
 from attrs import define, field
-from skoll.utils import default_ssl
 from nats.js import JetStreamContext
-from skoll.errors import InternalError, Error
-from skoll.domain import Message, ID, RawMessage
-from skoll.result import Result, fail, ok, is_ok
 from nats.aio.client import Client as NatsClient
-from skoll.application import Mediator, Subscriber, Service
 from nats.aio.subscription import Subscription as NSubscription
 
-from .utils import run_callback
+from .config import SSL
+from .utils import call_with_dependencies
+from .result import Result, fail, ok, is_ok, is_fail
+from .exceptions import Error, InternalError, ValidationFailed
+from .domain import Message, ID, RawMessage, Subscriber, Service, Mediator
 
 __all__ = ["NatsMediator"]
 
@@ -74,9 +73,7 @@ class NatsMediator(Mediator):
         try:
             if self.nc.is_connected or self.nc.is_reconnecting:
                 return None
-            await self.nc.connect(
-                tls=default_ssl, servers=self.servers, max_reconnect_attempts=-1, user_credentials=self.creds
-            )
+            await self.nc.connect(tls=SSL, servers=self.servers, max_reconnect_attempts=-1, user_credentials=self.creds)
             self._js = self.nc.jetstream()
             return None
         except Exception as e:
@@ -106,6 +103,27 @@ class NatsMediator(Mediator):
             return fail(InternalError.from_exception(e, extra={"message": f"Request timed out"}))
         except Exception as e:
             return fail(InternalError.from_exception(e))
+
+
+def get_message(cls: type[Message], message: Message | RawMessage) -> Message:
+    if isinstance(message, Message):
+        return message
+    res = cls.create(raw=message)
+    if is_fail(res):
+        raise ValidationFailed(errors=res.err.errors)
+
+    return res.value
+
+
+async def run_callback(subscriber: Subscriber[t.Any], message: Message | RawMessage) -> Result[t.Any]:
+    topic = message.name if isinstance(message, Message) else message.get("name")
+    try:
+        msg = get_message(subscriber.msg_type, message)
+        return await call_with_dependencies(subscriber.callback, {subscriber.msg_arg: msg})
+    except Error as err:
+        return fail(err=err)
+    except Exception as exc:
+        return fail(err=InternalError.from_exception(exc, extra={"subject": topic, "message": message}))
 
 
 def wrap_callback(subscriber: Subscriber[t.Any]) -> t.Callable[[Msg], c.Awaitable[None]]:

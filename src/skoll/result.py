@@ -1,7 +1,7 @@
 import typing as t
 from attrs import define
 
-from .errors import Error, InvalidField
+from .exceptions import Error, InvalidField
 
 
 __all__ = ["Result", "ok", "fail", "is_ok", "is_fail", "combine"]

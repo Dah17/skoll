@@ -3,14 +3,14 @@ import typing as t
 
 from json import dumps
 from attrs import define
-from skoll.domain import Entity
-from skoll.utils import from_json
-from skoll.result import Result, is_fail
 from contextlib import asynccontextmanager
 from asyncpg.pool import Pool, PoolConnectionProxy
-from skoll.errors import InternalError, NotFound, Conflict
 from asyncpg import Record, create_pool, UniqueViolationError
-from skoll.application import DB, Repository, Criteria, ListCriteria, ListPage
+
+from .utils import from_json
+from .result import Result, is_fail
+from .exceptions import InternalError, NotFound, Conflict
+from .domain import Entity, DB, Repository, Criteria, ListCriteria, ListPage
 
 
 __all__ = ["PostgresDB", "PostgresRepo", "parse_pg_row"]

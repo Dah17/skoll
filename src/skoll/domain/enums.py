@@ -1,4 +1,4 @@
-from .base import Enum
+from .primitives import Enum
 
 __all__ = ["SortDirection", "Status", "ThemeMode", "UnitSystem"]
 

@@ -6,7 +6,7 @@ from enum import Enum as _Enum
 
 
 from skoll.utils import to_snake_case, serialize
-from skoll.errors import MissingField, InvalidField, Error
+from skoll.exceptions import MissingField, InvalidField, Error
 from skoll.result import Result, fail, ok, combine, is_fail, is_ok
 
 
@@ -78,7 +78,11 @@ class Object(ABC):
         res = combine(results)
         return cls._init(value=res.value) if is_ok(res) else res
 
-    def evolve(self, **kwargs: t.Any) -> t.Self:
+    def evolve(self, allow_none: bool = False, **kwargs: t.Any) -> t.Self:
+        allowed_keys = {f.name for f in attrs.fields(self.__class__)}
+        keys_to_remove = [key for key in kwargs if key not in allowed_keys or (kwargs[key] is None and not allow_none)]
+        for k in keys_to_remove:
+            del kwargs[k]
         return attrs.evolve(self, **kwargs)
 
 

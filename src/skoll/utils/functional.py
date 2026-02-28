@@ -3,15 +3,13 @@ import os
 import inspect
 import functools
 import typing as t
+import collections.abc as c
 
 from ulid import ulid
 from json import loads
-from certifi import where
-import collections.abc as c
 from zoneinfo import ZoneInfo
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from ssl import SSLContext, create_default_context
 
 
 __all__ = [
@@ -21,7 +19,7 @@ __all__ = [
     "from_json",
     "serialize",
     "impartial",
-    "default_ssl",
+    "unwrap_or",
     "sanitize_dict",
     "to_camel_case",
     "to_snake_case",
@@ -36,7 +34,6 @@ __all__ = [
 _RE_NON_ALNUM = re.compile(r"[^a-zA-Z0-9]+")
 _RE_CAMEL_BOUNDARY_1 = re.compile(r"(.)([A-Z][a-z]+)")
 _RE_CAMEL_BOUNDARY_2 = re.compile(r"([a-z0-9])([A-Z])")
-default_ssl: SSLContext = create_default_context(cafile=where())
 
 new_ulid: t.Callable[[], str] = lambda: ulid().lower()
 
@@ -205,3 +202,9 @@ def get_config_var[T](keys: list[str], default: T) -> t.Callable[[], T]:
         return default
 
     return get_var
+
+
+def unwrap_or[T](value: T | None, default: T, invalid: c.Collection[t.Any] | None = None) -> T:
+    if value is None or (invalid is not None and value in invalid):
+        return default
+    return value

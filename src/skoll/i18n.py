@@ -3,10 +3,10 @@ from json import load
 from skoll.domain import Locale
 
 
-__all__ = ["I18N"]
+__all__ = ["I18n"]
 
 
-class I18N:
+class I18n:
 
     base_path: str
     translations: dict[str, dict[str, str]]

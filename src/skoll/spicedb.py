@@ -1,12 +1,13 @@
 import typing as t
+
 from json import loads
 from attrs import define
 from re import match as re_match
 from aiohttp import ClientSession
 
-from skoll.errors import Forbidden
-from skoll.utils import sanitize_dict
-from skoll.application import AuthzWriteChange, AuthzPrecondition, AuthzLookupResult, Authz
+from .exceptions import Forbidden
+from .utils import sanitize_dict
+from .domain import AuthzWriteChange, AuthzPrecondition, AuthzLookupResult, Authz
 
 
 __all__ = ["SpiceDBAuthz"]

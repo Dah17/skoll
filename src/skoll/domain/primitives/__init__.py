@@ -1,14 +1,15 @@
 import re
 import typing as t
+
 from attrs import define, field
 from zoneinfo import available_timezones
-from datetime import datetime, timedelta, UTC
-
-from skoll.domain.base import Object
-from skoll.errors import InvalidField
+from skoll.exceptions import InvalidField
 from skoll.result import Result, ok, fail
+from datetime import datetime, timedelta, UTC
 from skoll.constants import CURRENCIES, COUNTRY_CODES
 from skoll.utils import new_ulid, to_tz, to_snake_case, safe_call
+
+from .object import Object, Enum
 
 ID_REGEX = r"^[0-9a-z]{26}$"
 EMAIL_REGEX = r"^[^@]+@[^@]+$"
@@ -19,7 +20,9 @@ __all__ = [
     "ID",
     "Map",
     "Time",
+    "Enum",
     "Email",
+    "Object",
     "Locale",
     "Timezone",
     "DateTime",

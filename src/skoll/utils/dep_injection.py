@@ -1,7 +1,8 @@
 import inspect
 import typing as t
-from attrs import define
 import collections.abc as c
+
+from attrs import define
 from contextlib import AsyncExitStack, AbstractAsyncContextManager
 
 from .functional import to_context_manager, get_signature
@@ -13,13 +14,7 @@ type DepFn = t.Callable[..., t.Any]
 type BaseFn[T] = t.Callable[..., c.Coroutine[t.Any, t.Any, T]]
 
 
-__all__ = [
-    "depend",
-    "resolve",
-    "Dependent",
-    "get_dependant",
-    "call_with_dependencies",
-]
+__all__ = ["depend", "resolve", "Dependent", "get_dependant", "call_with_dependencies"]
 
 
 @define(slots=True, kw_only=True)

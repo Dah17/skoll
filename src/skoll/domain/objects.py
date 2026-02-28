@@ -1,14 +1,27 @@
 import typing as t
+
 from datetime import timedelta
 from attrs import define, field
 
-from skoll.domain.base import Object
-from skoll.domain.primitives import ID, PositiveInt, DateTime, Latitude, Longitude, Time, LocalizedText
+from .primitives import (
+    ID,
+    Time,
+    Object,
+    DateTime,
+    Latitude,
+    Timezone,
+    Currency,
+    Longitude,
+    PositiveInt,
+    CountryCode,
+    LocalizedText,
+)
 
 
 __all__ = [
     "Entity",
     "Period",
+    "IPInfo",
     "Address",
     "TimeSlot",
     "Coordinate",
@@ -88,6 +101,16 @@ class SpecialHours(Object):
 
 
 @define(kw_only=True, slots=True, frozen=True)
+class IPInfo(Object):
+
+    timezone: Timezone
+    currency: Currency
+    city: str | None = None
+    country_code: CountryCode
+    region_code: str | None = None
+
+
+@define(kw_only=True, slots=True, frozen=True)
 class WorkingHours(Object):
 
     timezone: str
@@ -119,9 +142,9 @@ class Entity(Object):
         return hash(self.id.serialize())
 
     @t.override
-    def evolve(self, **kwargs: t.Any) -> t.Self:
+    def evolve(self, allow_none: bool = False, **kwargs: t.Any) -> t.Self:
         if "updated_at" not in kwargs:
             kwargs["updated_at"] = DateTime.now()
         if "version" not in kwargs:
             kwargs["version"] = self.version.increment()
-        return super().evolve(**kwargs)
+        return super().evolve(allow_none=allow_none, **kwargs)

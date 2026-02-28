@@ -1,22 +1,28 @@
 import typing as t
+import collections.abc as c
+
 from attrs import define, field
+from skoll.result import is_ok, Result
+from inspect import iscoroutinefunction, signature
 
-from skoll.result import is_ok
-from skoll.domain.base import Object
-from skoll.domain.primitives import ID, DateTime, Locale, Map, Timezone
 
+from .primitives import Object, ID, DateTime, Locale, Map, Timezone
 
 __all__ = [
+    "Service",
     "Message",
     "MsgClient",
     "RawMessage",
     "MsgContext",
-    "MsgPayload",
+    "Subscriber",
     "RawMsgClient",
     "RawMsgContext",
     "MsgClientDevice",
     "RawMsgClientDevice",
+    "SubscriberCallback",
 ]
+
+type SubscriberCallback[T: Message] = t.Callable[t.Concatenate[T, ...], c.Coroutine[t.Any, t.Any, Result[t.Any]]]
 
 
 class RawMsgClientDevice(t.TypedDict):
@@ -92,20 +98,12 @@ class MsgContext(Object):
         return cls()
 
 
-@define(frozen=True, kw_only=True, slots=True)
-class MsgPayload(Object):
-
-    @classmethod
-    def empty(cls) -> t.Self:
-        return cls()
-
-
 @define(frozen=True, kw_only=True, slots=True, eq=False)
 class Message(Object):
 
     name: str
     source: str
-    payload: MsgPayload
+    payload: Object
     id: ID = field(factory=ID.new)
     created_at: DateTime = field(factory=DateTime.now)
     context: MsgContext = field(factory=MsgContext.default)
@@ -130,3 +128,58 @@ class Message(Object):
         if is_ok(res):
             return res.value
         return None
+
+
+@define(frozen=True, kw_only=True, slots=True)
+class Subscriber[T: Message]:
+
+    topic: str
+    msg_arg: str
+    queued: bool
+    will_reply: bool
+    service_name: str
+    msg_type: type[Message]
+    js_stream: str | None = None
+    callback: SubscriberCallback[T]
+
+
+@define(kw_only=True, slots=True, frozen=True)
+class Service:
+
+    name: str
+    subscribers: list[Subscriber[t.Any]] = field(factory=list)
+
+    def _add[T: Message](
+        self, topic: str, will_reply: bool, queued: bool, callback: SubscriberCallback[T], js_stream: str | None = None
+    ):
+        first_arg = list(signature(callback).parameters.values())[0]
+        if not issubclass(first_arg.annotation, Message) or not iscoroutinefunction(callback):
+            raise TypeError(
+                f"Service subscriber @on/@reply must be a coroutine and with first argument being a subclass of Message"
+            )
+        self.subscribers.append(
+            Subscriber(
+                topic=topic,
+                queued=queued,
+                callback=callback,
+                js_stream=js_stream,
+                will_reply=will_reply,
+                msg_arg=first_arg.name,
+                service_name=self.name,
+                msg_type=first_arg.annotation,
+            )
+        )
+
+    def on(self, topic: str, queued: bool = False, stream: str | None = None):
+        def decorator[T: Message](callback: SubscriberCallback[T]):
+            self._add(topic, will_reply=False, queued=queued, callback=callback, js_stream=stream)
+            return callback
+
+        return decorator
+
+    def reply(self, topic: str):
+        def decorator[T: Message](callback: SubscriberCallback[T]):
+            self._add(topic, will_reply=True, queued=True, callback=callback)
+            return callback
+
+        return decorator
