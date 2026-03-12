@@ -6,7 +6,7 @@ from skoll.config import SMTPConfig
 from .primitives import ID
 from .objects import Entity, IPInfo
 from .messaging import Message, RawMessage, Service
-from .typing import Criteria, ListCriteria, ListPage, AuthzWriteChange, AuthzPrecondition, AuthzLookupResult
+from .typing import Criteria, ListPage, AuthzWriteChange, AuthzPrecondition, AuthzLookupResult
 
 
 __all__ = ["DB", "Repository", "Mediator", "Authz", "EmailSender", "IPInfoProvider"]
@@ -31,7 +31,7 @@ class Repository[T: Entity](t.Protocol):
     async def delete(self, criteria: Criteria) -> None: ...
     async def exist(self, criteria: Criteria) -> bool: ...
     async def get(self, criteria: Criteria) -> T | None: ...
-    async def list(self, criteria: ListCriteria) -> ListPage[T]: ...
+    async def list(self, criteria: Criteria) -> ListPage[T]: ...
 
 
 class Mediator(t.Protocol):

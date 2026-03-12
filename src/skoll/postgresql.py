@@ -11,7 +11,7 @@ from asyncpg import Record, create_pool, UniqueViolationError
 from .utils import from_json
 from .result import Result, is_fail
 from .exceptions import InternalError, NotFound, Conflict
-from .domain import Entity, DB, Repository, Criteria, ListCriteria, ListPage
+from .domain import Entity, DB, Repository, Criteria, ListPage
 
 
 __all__ = ["PostgresDB", "PostgresRepo", "parse_pg_row"]
@@ -112,7 +112,7 @@ class PostgresRepo[T: Entity](Repository[T]):
             raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql})
 
     @t.override
-    async def list(self, criteria: ListCriteria) -> ListPage[T]:
+    async def list(self, criteria: Criteria) -> ListPage[T]:
         try:
             qry, params = criteria.as_sql
             rows = await self.conn.fetch(qry, *params)
