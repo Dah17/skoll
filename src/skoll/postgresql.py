@@ -3,8 +3,9 @@ import typing as t
 
 from json import dumps
 from attrs import define
+from asyncpg.pool import Pool
+from asyncpg.connection import Connection
 from contextlib import asynccontextmanager
-from asyncpg.pool import Pool, PoolConnectionProxy
 from asyncpg import Record, create_pool, UniqueViolationError
 
 from .utils import from_json
@@ -28,7 +29,7 @@ def parse_pg_row(row: t.Any, errors_hints: dict[str, t.Any] | None = None) -> di
     return raw
 
 
-class PostgresDB(DB[PoolConnectionProxy]):
+class PostgresDB(DB[Connection]):
 
     dsn: str
     __pool: Pool | None
@@ -60,7 +61,7 @@ class PostgresDB(DB[PoolConnectionProxy]):
         if self.__pool is None:
             raise RuntimeError("Database pool is not initialized.")
         async with self.__pool.acquire() as conn:
-            yield t.cast(PoolConnectionProxy, conn)
+            yield t.cast(Connection, conn)
 
     @t.override
     @asynccontextmanager
@@ -69,14 +70,14 @@ class PostgresDB(DB[PoolConnectionProxy]):
             raise RuntimeError("Database pool is not initialized.")
         async with self.__pool.acquire() as conn:
             async with conn.transaction():
-                yield t.cast(PoolConnectionProxy, conn)
+                yield t.cast(Connection, conn)
 
 
 @define(kw_only=True, frozen=True, slots=True)
 class PostgresRepo[T: Entity](Repository[T]):
 
     table: str
-    conn: PoolConnectionProxy
+    conn: Connection
     restore_func: t.Callable[[dict[str, t.Any]], Result[T]]
 
     @t.override
@@ -139,9 +140,10 @@ class PostgresRepo[T: Entity](Repository[T]):
             raise InternalError.from_exception(exc, extra={"raw": state.serialize(), "table": self.table})
 
     def __prepare_insert(self, raw: dict[str, t.Any]):
-        params: list[t.Any] = []
-        attrs: list[str] = []
         keys: list[str] = []
+        attrs: list[str] = []
+        params: list[t.Any] = []
+
         for idx, kv in enumerate(raw.items()):
             attrs.append(kv[0])
             keys.append(f"${idx + 1}")
