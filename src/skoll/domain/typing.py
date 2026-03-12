@@ -10,7 +10,6 @@ __all__ = [
     "Criteria",
     "ListPage",
     "SQLCriteria",
-    "ListCriteria",
     "DecodedJwtToken",
     "AuthzWriteChange",
     "AuthzPrecondition",
@@ -49,18 +48,13 @@ class DecodedJwtToken(t.NamedTuple):
 class Criteria(ABC):
 
     id: ID | None = None
+    cursor: str | None = None
+    limit: int = field(default=150)
 
     @property
     @abstractmethod
     def as_sql(self) -> SQLCriteria:
         raise NotImplementedError("Subclasses must implement this method")
-
-
-@define(frozen=True, kw_only=True, slots=True)
-class ListCriteria(Criteria, ABC):
-
-    cursor: str | None = None
-    limit: int = field(default=150)
 
 
 class AuthzLookupResult(t.NamedTuple):

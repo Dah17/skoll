@@ -116,7 +116,7 @@ class Unauthenticated(Error):
     field: str | None = attrs.field(default=None, init=False)
     code: str = attrs.field(default="unauthenticated", init=False)
     status: ErrorStatusCode | None = attrs.field(default=401, init=False)
-    detail: str = attrs.field(default="This request requires is only allowed for authenticated users", init=False)
+    detail: str = attrs.field(default="This request requires authentication", init=False)
 
 
 @attrs.define(kw_only=True, slots=True)
