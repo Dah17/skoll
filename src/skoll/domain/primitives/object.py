@@ -149,10 +149,9 @@ def get_schema(cls: type[t.Any]) -> dict[str, _SchemaItem] | None:
 
     schema: dict[str, _SchemaItem] = {}
     for key, attr in attrs.fields_dict(cls).items():
-        is_list, optional, _cls = False, False, attr.type
-        if t.get_origin(_cls) == UnionType and t.get_args(_cls)[1] == type(None):
+        is_list, optional, _cls = False, type(None) in t.get_args(attr.type), attr.type
+        if t.get_origin(_cls) == UnionType:
             _cls = t.get_args(attr.type)[0]
-            optional = True
         if t.get_origin(_cls) == list:
             is_list = True
             _cls = t.get_args(attr.type)[0]

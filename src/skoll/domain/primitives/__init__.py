@@ -181,9 +181,20 @@ class DateTime(Object):
         tz = to_tz(tz_str)
         return cls(value=datetime.fromtimestamp(timestamp / 1000, tz=tz))
 
+    @classmethod
+    def from_iso(cls, iso: str, format: str = "%Y-%m-%dT%H:%M:%SZ", tz_str: str = "UTC") -> t.Self:
+        dt = datetime.strptime(iso, format)
+        return cls(value=dt.replace(tzinfo=to_tz(tz_str)))
+
     @t.override
     @classmethod
     def prepare(cls, raw: t.Any) -> Result[t.Any]:
+        def from_iso(x: str) -> datetime | None:
+            return datetime.fromisoformat(x.replace("Z", "+00:00")).replace(tzinfo=UTC)
+
+        if date := safe_call(from_iso, raw):
+            return ok(date)
+
         value = safe_call(int, raw)
         if value is not None and value >= 0:
             return ok(datetime.fromtimestamp(value / 1000, tz=UTC))
