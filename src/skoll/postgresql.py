@@ -33,19 +33,21 @@ class PostgresDB(DB[Connection]):
 
     dsn: str
     __pool: Pool | None
+    __max_pool_size: int
 
-    def __init__(self, dsn: str | None = None) -> None:
+    def __init__(self, dsn: str | None = None, max_pool_size: int = 10) -> None:
         dsn = dsn or os.getenv("PG_DB_DSN", "")
         if not dsn:
             raise InternalError(debug={"dsn": dsn, "message": "PG_DB_DSN is not set"})
         self.dsn = dsn
         self.__pool = None
+        self.__max_pool_size = max_pool_size
 
     @t.override
     async def connect(self) -> None:
         if self.__pool is None:
             try:
-                self.__pool = await create_pool(dsn=self.dsn, min_size=1, max_size=10)
+                self.__pool = await create_pool(dsn=self.dsn, min_size=1, max_size=self.__max_pool_size)
             except Exception as exc:
                 raise InternalError.from_exception(exc)
 
