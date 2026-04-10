@@ -22,6 +22,7 @@ class NatsMediator(Mediator):
 
     creds: str
     servers: list[str]
+    default_req_timeout: int = 30
     _js: JetStreamContext | None = None
     nc: NatsClient = field(init=False, factory=lambda: NatsClient())
     subscriptions: dict[str, list[NSubscription]] = field(factory=dict)
@@ -94,7 +95,9 @@ class NatsMediator(Mediator):
     async def request(self, msg: Message | RawMessage) -> Result[t.Any]:
         try:
             subject, payload = (msg.name, msg.serialize()) if isinstance(msg, Message) else (msg["name"], msg)
-            response = await self.nc.request(subject, json.dumps(payload).encode("utf-8"), timeout=5)
+            response = await self.nc.request(
+                subject, json.dumps(payload).encode("utf-8"), timeout=self.default_req_timeout
+            )
             raw_msg = json.loads(response.data.decode("utf-8"))
             if raw_msg.get("error") is not None:
                 return fail(Error.from_dict(raw_msg["error"]))
