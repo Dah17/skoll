@@ -291,7 +291,7 @@ class Email(Object):
     def prepare(cls, raw: t.Any) -> Result[t.Any]:
         value = (safe_call(str, raw) or "").strip()
         if value and re.fullmatch(EMAIL_REGEX, value) is not None:
-            return ok(value)
+            return ok(value.lower())
         return fail(
             InvalidField(
                 field=to_snake_case(cls.__name__),
@@ -369,10 +369,6 @@ class Map(Object):
                 hints={"received": raw, "expected": "dict"},
             )
         )
-
-    @classmethod
-    def empty(cls) -> t.Self:
-        return cls(value={})
 
 
 @define(kw_only=True, slots=True, frozen=True)

@@ -88,9 +88,9 @@ class MsgClient(Object):
 class MsgContext(Object):
 
     user_id: ID | None = None
+    extra: Map = field(factory=Map)
     span_id: ID = field(factory=ID.new)
     trace_id: ID = field(factory=ID.new)
-    extra: Map = field(factory=Map.empty)
     client: MsgClient = field(factory=MsgClient.default)
 
     @classmethod
@@ -103,8 +103,8 @@ class Message(Object):
 
     name: str
     source: str
-    payload: Object
     id: ID = field(factory=ID.new)
+    payload: Object = field(factory=Map)
     created_at: DateTime = field(factory=DateTime.now)
     context: MsgContext = field(factory=MsgContext.default)
 
