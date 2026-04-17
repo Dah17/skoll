@@ -103,8 +103,8 @@ class Message(Object):
 
     name: str
     source: str
+    payload: Object
     id: ID = field(factory=ID.new)
-    payload: Object = field(factory=Map)
     created_at: DateTime = field(factory=DateTime.now)
     context: MsgContext = field(factory=MsgContext.default)
 
