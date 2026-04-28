@@ -3,25 +3,10 @@ import typing as t
 from attrs import define, field
 from abc import ABC, abstractmethod
 
-from .primitives import ID, DateTime
+from .primitives import ID
 
 
-__all__ = [
-    "Criteria",
-    "ListPage",
-    "SQLCriteria",
-    "DecodedJwtToken",
-    "AuthzWriteChange",
-    "AuthzPrecondition",
-    "AuthzLookupResult",
-    "AuthzWriteOperation",
-    "AuthzPreconditionOperation",
-]
-
-type AuthzWriteOperation = t.Literal["SET", "DELETE"]
-type AuthzPrecondition = tuple[AuthzPreconditionOperation, str]
-type AuthzPreconditionOperation = t.Literal["MUST_MATCH", "MUST_NOT_MATCH"]
-type AuthzWriteChange = tuple[AuthzWriteOperation, str, tuple[str, dict[str, t.Any]] | None, DateTime | None]
+__all__ = ["Criteria", "ListPage", "SQLCriteria", "DecodedJwtToken"]
 
 
 class ListPage[T](t.NamedTuple):
@@ -55,8 +40,3 @@ class Criteria(ABC):
     @abstractmethod
     def as_sql(self) -> SQLCriteria:
         raise NotImplementedError("Subclasses must implement this method")
-
-
-class AuthzLookupResult(t.NamedTuple):
-    ids: list[str]
-    cursor: str | None = None

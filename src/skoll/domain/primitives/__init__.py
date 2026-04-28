@@ -38,11 +38,7 @@ __all__ = [
 @define(kw_only=True, slots=True, frozen=True)
 class ID(Object):
 
-    value: str
-
-    @classmethod
-    def new(cls) -> t.Self:
-        return cls(value=new_ulid())
+    value: str = field(factory=lambda: new_ulid())
 
     @t.override
     @classmethod
@@ -303,11 +299,7 @@ class Email(Object):
 @define(kw_only=True, slots=True, frozen=True)
 class Locale(Object):
 
-    value: str
-
-    @classmethod
-    def default(cls) -> t.Self:
-        return cls(value="en-US")
+    value: str = "en-US"
 
     @t.override
     @classmethod
@@ -374,11 +366,7 @@ class Map(Object):
 @define(kw_only=True, slots=True, frozen=True)
 class Timezone(Object):
 
-    value: str
-
-    @classmethod
-    def default(cls) -> t.Self:
-        return cls(value="UTC")
+    value: str = "UTC"
 
     @t.override
     @classmethod

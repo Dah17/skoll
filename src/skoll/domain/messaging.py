@@ -3,6 +3,7 @@ import collections.abc as c
 
 from attrs import define, field
 from skoll.result import is_ok, Result
+from skoll.exceptions import InternalError
 from inspect import iscoroutinefunction, signature
 
 
@@ -66,22 +67,14 @@ class MsgClientDevice(Object):
     os_name: str | None = None
     os_version: str | None = None
 
-    @classmethod
-    def default(cls) -> t.Self:
-        return cls()
-
 
 @define(frozen=True, kw_only=True, slots=True)
 class MsgClient(Object):
 
     ip_address: str | None = None
-    locale: Locale = field(factory=Locale.default)
-    timezone: Timezone = field(factory=Timezone.default)
-    device: MsgClientDevice = field(factory=MsgClientDevice.default)
-
-    @classmethod
-    def default(cls) -> t.Self:
-        return cls()
+    locale: Locale = field(factory=Locale)
+    timezone: Timezone = field(factory=Timezone)
+    device: MsgClientDevice = field(factory=MsgClientDevice)
 
 
 @define(frozen=True, kw_only=True, slots=True)
@@ -89,13 +82,9 @@ class MsgContext(Object):
 
     user_id: ID | None = None
     extra: Map = field(factory=Map)
-    span_id: ID = field(factory=ID.new)
-    trace_id: ID = field(factory=ID.new)
-    client: MsgClient = field(factory=MsgClient.default)
-
-    @classmethod
-    def default(cls) -> t.Self:
-        return cls()
+    span_id: ID = field(factory=ID)
+    trace_id: ID = field(factory=ID)
+    client: MsgClient = field(factory=MsgClient)
 
 
 @define(frozen=True, kw_only=True, slots=True, eq=False)
@@ -103,10 +92,16 @@ class Message(Object):
 
     name: str
     source: str
-    payload: Object
-    id: ID = field(factory=ID.new)
+    id: ID = field(factory=ID)
+    payload: Map = field(factory=Map)
+    context: MsgContext = field(factory=MsgContext)
     created_at: DateTime = field(factory=DateTime.now)
-    context: MsgContext = field(factory=MsgContext.default)
+
+    def unwrap_payload[T: Object](self, cls: type[T]) -> T:
+        res = cls.create(self.payload.value)
+        if not is_ok(res):
+            raise InternalError(debug={"message": "Failed to unwrap payload"})
+        return res.value
 
     @t.override
     def __eq__(self, other: t.Any) -> bool:

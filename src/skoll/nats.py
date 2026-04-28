@@ -4,6 +4,7 @@ import collections.abc as c
 
 from nats.aio.msg import Msg
 from attrs import define, field
+from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
 from nats.aio.client import Client as NatsClient
 from nats.aio.subscription import Subscription as NSubscription
@@ -12,7 +13,7 @@ from .config import SSL
 from .utils import call_with_dependencies
 from .result import Result, fail, ok, is_ok, is_fail
 from .exceptions import Error, InternalError, ValidationFailed
-from .domain import Message, ID, RawMessage, Subscriber, Service, Mediator
+from .domain import Message, ID, RawMessage, Subscriber, Service, Mediator, KVStore
 
 __all__ = ["NatsMediator"]
 
@@ -23,6 +24,7 @@ class NatsMediator(Mediator):
     creds: str
     servers: list[str]
     default_req_timeout: int = 30
+    _bucket: KeyValue | None = None
     _js: JetStreamContext | None = None
     nc: NatsClient = field(init=False, factory=lambda: NatsClient())
     subscriptions: dict[str, list[NSubscription]] = field(factory=dict)
@@ -33,11 +35,22 @@ class NatsMediator(Mediator):
             raise InternalError(debug={"message": "JetStream context is not initialized"})
         return self._js
 
+    @property
+    def bucket(self) -> KeyValue:
+        if self._bucket is None:
+            raise InternalError(debug={"message": "KV bucket is not initialized"})
+        return self._bucket
+
+    @property
+    @t.override
+    def kv(self) -> KVStore:
+        return NatsKVStore(bucket=self.bucket)
+
     @t.override
     async def subscribe(self, service: Service) -> ID:
         if not self.nc.is_connected:
             raise InternalError(debug={"message": "Attempt to subscribe before nats client is connected"})
-        sub_id = ID.new()
+        sub_id = ID()
         subscribtions: list[NSubscription] = []
         for subscriber in service.subscribers:
             if subscriber.js_stream is not None:
@@ -76,6 +89,7 @@ class NatsMediator(Mediator):
                 return None
             await self.nc.connect(tls=SSL, servers=self.servers, max_reconnect_attempts=-1, user_credentials=self.creds)
             self._js = self.nc.jetstream()
+            self._bucket = await self._js.create_key_value(bucket="skoll_kv_store", history=1)
             return None
         except Exception as e:
             raise InternalError.from_exception(e)
@@ -149,3 +163,33 @@ def wrap_callback(subscriber: Subscriber[t.Any]) -> t.Callable[[Msg], c.Awaitabl
             print(InternalError.from_exception(e))
 
     return callback
+
+
+@define(kw_only=True, slots=True)
+class NatsKVStore(KVStore):
+
+    bucket: KeyValue
+
+    @t.override
+    async def get(self, key: str) -> str | None:
+        try:
+            entry = await self.bucket.get(key)
+            return entry.value.decode("utf-8") if entry.value else None
+        except Exception:
+            return None
+
+    @t.override
+    async def set(self, key: str, value: str) -> None:
+        try:
+            await self.bucket.put(key, value.encode("utf-8"))
+            return None
+        except Exception as e:
+            raise InternalError.from_exception(e, extra={"message": f"Failed to set key {key} in KV store"})
+
+    @t.override
+    async def delete(self, key: str) -> None:
+        try:
+            await self.bucket.delete(key)
+            return None
+        except Exception as e:
+            raise InternalError.from_exception(e, extra={"message": f"Failed to delete key {key} in KV store"})

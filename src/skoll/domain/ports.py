@@ -5,11 +5,11 @@ from skoll.config import SMTPConfig
 
 from .primitives import ID
 from .objects import Entity, IPInfo
+from .typing import Criteria, ListPage
 from .messaging import Message, RawMessage, Service
-from .typing import Criteria, ListPage, AuthzWriteChange, AuthzPrecondition, AuthzLookupResult
 
 
-__all__ = ["DB", "Repository", "Mediator", "Authz", "EmailSender", "IPInfoProvider"]
+__all__ = ["DB", "Repository", "Mediator", "EmailSender", "IPInfoProvider", "KVStore"]
 
 
 class IPInfoProvider(t.Protocol):
@@ -34,8 +34,17 @@ class Repository[T: Entity](t.Protocol):
     async def list(self, criteria: Criteria) -> ListPage[T]: ...
 
 
+class KVStore(t.Protocol):
+
+    async def delete(self, key: str) -> None: ...
+    async def get(self, key: str) -> str | None: ...
+    async def set(self, key: str, value: str) -> None: ...
+
+
 class Mediator(t.Protocol):
 
+    @property
+    def kv(self) -> KVStore: ...
     async def connect(self) -> None: ...
     async def disconnect(self) -> None: ...
     async def unsubscribe(self, id: ID) -> None: ...
@@ -43,17 +52,6 @@ class Mediator(t.Protocol):
     async def subscribe(self, service: Service) -> ID: ...
     async def publish(self, *msg: Message | RawMessage) -> None: ...
     async def request(self, msg: Message | RawMessage) -> Result[t.Any]: ...
-
-
-class Authz(t.Protocol):
-
-    async def check(self, tuple: str, cxt: dict[str, t.Any] | None = None) -> None: ...
-    async def write(
-        self, changes: list[AuthzWriteChange], preconditions: list[AuthzPrecondition] | None = None
-    ) -> str: ...
-    async def lookup(
-        self, filter: str, cxt: dict[str, t.Any] | None = None, limit: int | None = None, cursor: str | None = None
-    ) -> AuthzLookupResult: ...
 
 
 class EmailSender(t.Protocol):
