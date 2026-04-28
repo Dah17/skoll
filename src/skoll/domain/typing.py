@@ -6,13 +6,19 @@ from abc import ABC, abstractmethod
 from .primitives import ID
 
 
-__all__ = ["Criteria", "ListPage", "SQLCriteria", "DecodedJwtToken"]
+__all__ = ["Criteria", "ListPage", "SQLCriteria", "DecodedJwtToken", "KVBucket"]
 
 
 class ListPage[T](t.NamedTuple):
 
     items: list[T]
     cursor: str | None = None
+
+
+class KVBucket(t.NamedTuple):
+
+    key: str
+    ttl: int | None = None
 
 
 class SQLCriteria(t.NamedTuple):
