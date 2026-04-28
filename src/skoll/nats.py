@@ -10,10 +10,10 @@ from nats.aio.client import Client as NatsClient
 from nats.aio.subscription import Subscription as NSubscription
 
 from .config import SSL
-from .utils import call_with_dependencies
 from .result import Result, fail, ok, is_ok, is_fail
+from .utils import call_with_dependencies, get_signature
 from .exceptions import Error, InternalError, ValidationFailed
-from .domain import Message, ID, RawMessage, Subscriber, Service, Mediator, KVStore, KVBucket
+from .domain import Message, ID, RawMessage, Subscriber, Service, Mediator, KVStore, KVBucket, Object
 
 __all__ = ["NatsMediator"]
 
@@ -24,21 +24,28 @@ class NatsMediator(Mediator):
     creds: str
     servers: list[str]
     default_req_timeout: int = 30
+    _bucket: KeyValue | None = None
     _js: JetStreamContext | None = None
-    buckets: dict[str, KeyValue] = field(factory=dict)
     nc: NatsClient = field(init=False, factory=lambda: NatsClient())
     subscriptions: dict[str, list[NSubscription]] = field(factory=dict)
 
     @property
     def js(self) -> JetStreamContext:
+
         if self._js is None:
             raise InternalError(debug={"message": "JetStream context is not initialized"})
         return self._js
 
     @property
+    def bucket(self) -> KeyValue:
+        if self._bucket is None:
+            raise InternalError(debug={"message": "KV bucket is not initialized"})
+        return self._bucket
+
+    @property
     @t.override
     def kv(self) -> KVStore:
-        return NatsKVStore(buckets=self.buckets)
+        return NatsKVStore(bucket=self.bucket)
 
     @t.override
     async def subscribe(self, service: Service) -> ID:
@@ -83,8 +90,7 @@ class NatsMediator(Mediator):
                 return None
             await self.nc.connect(tls=SSL, servers=self.servers, max_reconnect_attempts=-1, user_credentials=self.creds)
             self._js = self.nc.jetstream()
-            for bucket in kv_buckets or []:
-                self.buckets[bucket.key] = await self._js.create_key_value(bucket=bucket.key, history=1, ttl=bucket.ttl)
+            self._bucket = await self._js.create_key_value(bucket="skoll_kv_store", history=1)
             return None
         except Exception as e:
             raise InternalError.from_exception(e)
@@ -127,11 +133,25 @@ def get_message(cls: type[Message], message: Message | RawMessage) -> Message:
     return res.value
 
 
+def get_payload(subscriber: Subscriber[t.Any], message: Message) -> Object | None:
+    try:
+        for param in get_signature(subscriber.callback):
+            if param.name == "payload" and issubclass(param.annotation, Object):
+                return message.unwrap_payload(param.annotation)
+    except Exception:
+        return None
+
+
 async def run_callback(subscriber: Subscriber[t.Any], message: Message | RawMessage) -> Result[t.Any]:
     topic = message.name if isinstance(message, Message) else message.get("name")
     try:
         msg = get_message(subscriber.msg_type, message)
-        return await call_with_dependencies(subscriber.callback, {subscriber.msg_arg: msg})
+        cxt: dict[str, t.Any] = {
+            subscriber.msg_arg: msg,
+            "context": msg.context,
+            "payload": get_payload(subscriber, msg),
+        }
+        return await call_with_dependencies(subscriber.callback, cxt)
     except Error as err:
         return fail(err=err)
     except Exception as exc:
@@ -163,34 +183,36 @@ def wrap_callback(subscriber: Subscriber[t.Any]) -> t.Callable[[Msg], c.Awaitabl
 @define(kw_only=True, slots=True)
 class NatsKVStore(KVStore):
 
-    buckets: dict[str, KeyValue]
-
-    def bucket(self, key: str) -> KeyValue:
-        if key not in self.buckets:
-            raise InternalError(debug={"message": f"KV bucket '{key}' is not initialized"})
-        return self.buckets[key]
+    bucket: KeyValue
 
     @t.override
-    async def get(self, key: str, bucket: str) -> str | None:
+    async def get(self, key: str) -> str | None:
         try:
-
-            entry = await self.bucket(bucket).get(key)
+            entry = await self.bucket.get(key)
             return entry.value.decode("utf-8") if entry.value else None
         except Exception:
             return None
 
     @t.override
-    async def set(self, key: str, value: str, bucket: str) -> None:
+    async def add(self, key: str, value: str, ttl: int | None = None) -> None:
         try:
-            await self.bucket(bucket).put(key, value.encode("utf-8"))
+            await self.bucket.create(key=key, value=value.encode("utf-8"), msg_ttl=ttl)
             return None
         except Exception as e:
-            raise InternalError.from_exception(e, extra={"message": f"Failed to set key {key} in KV store"})
+            raise InternalError.from_exception(e, extra={"message": f"Failed to add key {key} in KV store"})
 
     @t.override
-    async def delete(self, key: str, bucket: str) -> None:
+    async def update(self, key: str, value: str, ttl: int | None = None) -> None:
         try:
-            await self.bucket(bucket).delete(key)
+            await self.bucket.update(key=key, value=value.encode("utf-8"), msg_ttl=ttl)
+            return None
+        except Exception as e:
+            raise InternalError.from_exception(e, extra={"message": f"Failed to update key {key} in KV store"})
+
+    @t.override
+    async def delete(self, key: str) -> None:
+        try:
+            await self.bucket.delete(key)
             return None
         except Exception as e:
             raise InternalError.from_exception(e, extra={"message": f"Failed to delete key {key} in KV store"})
