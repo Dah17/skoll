@@ -7,7 +7,6 @@ from contextlib import AsyncExitStack, AbstractAsyncContextManager
 
 from .functional import to_context_manager, get_signature
 
-
 type Cache = dict[t.Any, t.Any]
 type Context = dict[str, t.Any]
 type DepFn = t.Callable[..., t.Any]

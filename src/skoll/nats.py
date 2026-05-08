@@ -145,9 +145,9 @@ def get_payload(subscriber: Subscriber[t.Any], message: Message) -> Object | Non
 async def run_callback(subscriber: Subscriber[t.Any], message: Message | RawMessage) -> Result[t.Any]:
     topic = message.name if isinstance(message, Message) else message.get("name")
     try:
-        msg = get_message(subscriber.msg_type, message)
+        msg = get_message(Message, message)
         cxt: dict[str, t.Any] = {
-            subscriber.msg_arg: msg,
+            "msg": msg,
             "context": msg.context,
             "payload": get_payload(subscriber, msg),
         }
