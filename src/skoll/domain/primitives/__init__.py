@@ -353,7 +353,7 @@ class Map(Object):
     def prepare(cls, raw: t.Any) -> Result[t.Any]:
         value = safe_call(dict, raw)
         if value is not None:
-            return ok(t.cast(dict[str, t.Any], value))
+            return ok(t.cast(dict[str, t.Any], {"value": value}))
 
         return fail(
             InvalidField(

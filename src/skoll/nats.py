@@ -134,12 +134,13 @@ def get_message(cls: type[Message], message: Message | RawMessage) -> Message:
 
 
 def get_payload(subscriber: Subscriber[t.Any], message: Message) -> Object | None:
-    try:
-        for param in get_signature(subscriber.callback):
-            if param.name == "payload" and issubclass(param.annotation, Object):
-                return message.unwrap_payload(param.annotation)
-    except Exception:
-        return None
+    for param in get_signature(subscriber.callback):
+        if param.name == "payload" and issubclass(param.annotation, Object):
+            res = param.annotation.create(message.payload.value)
+            if is_fail(res):
+                raise ValidationFailed(errors=res.err.errors)
+            return message.unwrap_payload(param.annotation)
+    return None
 
 
 async def run_callback(subscriber: Subscriber[t.Any], message: Message | RawMessage) -> Result[t.Any]:

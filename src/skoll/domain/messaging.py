@@ -4,7 +4,6 @@ import collections.abc as c
 from attrs import define, field
 from skoll.result import is_ok, Result
 from skoll.exceptions import InternalError
-from inspect import iscoroutinefunction, signature
 
 
 from .primitives import Object, ID, DateTime, Locale, Map, Timezone
@@ -145,11 +144,6 @@ class Service:
     def _add(
         self, topic: str, will_reply: bool, queued: bool, callback: SubscriberCallback, js_stream: str | None = None
     ):
-        # first_arg = list(signature(callback).parameters.values())[0]
-        # if not issubclass(first_arg.annotation, Message) or not iscoroutinefunction(callback):
-        #     raise TypeError(
-        #         f"Service subscriber @on/@reply must be a coroutine and with first argument being a subclass of Message"
-        #     )
         self.subscribers.append(
             Subscriber(
                 topic=topic,
