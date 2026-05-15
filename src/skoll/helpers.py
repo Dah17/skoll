@@ -15,7 +15,6 @@ from .result import Result, fail, ok, is_ok
 from .domain import DecodedJwtToken, IPInfo
 from .config import SMTPConfig, JwtConfig, SSL
 
-
 __all__ = ["send_email", "decode_jwt_token", "create_jwt_token", "fetch_ip_info"]
 
 
@@ -28,7 +27,13 @@ async def send_email(to: str, title: str, html_body: str, config: SMTPConfig = S
     message["From"] = sender
     message["To"] = to
     _ = await send(
-        message, hostname=config.host, port=config.port, username=config.user, password=config.password, use_tls=True
+        message,
+        hostname=config.host,
+        port=config.port,
+        username=config.user,
+        password=config.password,
+        start_tls=config.start_tls,
+        use_tls=not config.start_tls,
     )
 
 

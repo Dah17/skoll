@@ -4,7 +4,6 @@ from skoll.utils import get_config_var
 from ssl import create_default_context
 from certifi import where as ssl_where
 
-
 __all__ = ["SMTPConfig", "JwtConfig", "SSL"]
 
 
@@ -19,6 +18,7 @@ class SMTPConfig:
     sender_name: str = field(factory=get_config_var(keys=["SMTP_SENDER_NAME"], default=""))
     port: int = field(factory=lambda: int(get_config_var(keys=["SMTP_PORT"], default=465)()))
     sender_email: str = field(factory=get_config_var(keys=["SMTP_SENDER_EMAIL"], default=""))
+    start_tls: bool = field(factory=lambda: bool(get_config_var(keys=["SMTP_START_TLS"], default="False")))
 
 
 @define(frozen=True, slots=True, kw_only=True)
