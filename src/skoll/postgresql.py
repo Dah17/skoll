@@ -13,7 +13,6 @@ from .result import Result, is_fail
 from .exceptions import InternalError, NotFound, Conflict
 from .domain import Entity, DB, Repository, Criteria, ListPage
 
-
 __all__ = ["PostgresDB", "PostgresRepo", "parse_pg_row"]
 
 

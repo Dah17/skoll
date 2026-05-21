@@ -11,6 +11,7 @@ from .primitives import Object, ID, DateTime, Locale, Map, Timezone
 __all__ = [
     "Service",
     "Message",
+    "Services",
     "MsgClient",
     "RawMessage",
     "MsgContext",
@@ -125,7 +126,7 @@ class Message(Object):
 
 
 @define(frozen=True, kw_only=True, slots=True)
-class Subscriber[T: Message]:
+class Subscriber:
 
     topic: str
     queued: bool
@@ -139,7 +140,7 @@ class Subscriber[T: Message]:
 class Service:
 
     name: str
-    subscribers: list[Subscriber[t.Any]] = field(factory=list)
+    subscribers: list[Subscriber] = field(factory=list)
 
     def _add(
         self, topic: str, will_reply: bool, queued: bool, callback: SubscriberCallback, js_stream: str | None = None
@@ -168,3 +169,22 @@ class Service:
             return callback
 
         return decorator
+
+
+@define(frozen=True, kw_only=True, slots=True)
+class Services:
+
+    items: list[Service] = field(factory=list)
+
+    def extend(self, service: list[Service] | list[t.Self]):
+        for item in service:
+            if isinstance(item, Services):
+                self.items.extend(item.items)
+            else:
+                self.items.append(item)
+
+    def __add__(self, other: t.Self | Service):
+        return Services(items=self.items + (other.items if isinstance(other, Services) else [other]))
+
+    def __radd__(self, other: t.Self | Service):
+        return Services(items=(other.items if isinstance(other, Services) else [other]) + self.items)

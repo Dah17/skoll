@@ -13,7 +13,7 @@ from .config import SSL
 from .result import Result, fail, ok, is_ok, is_fail
 from .utils import call_with_dependencies, get_signature
 from .exceptions import Error, InternalError, ValidationFailed
-from .domain import Message, ID, RawMessage, Subscriber, Service, Mediator, KVStore, KVBucket, Object
+from .domain import Message, ID, RawMessage, Subscriber, Service, Services, Mediator, KVStore, KVBucket, Object
 
 __all__ = ["NatsMediator"]
 
@@ -48,12 +48,13 @@ class NatsMediator(Mediator):
         return NatsKVStore(bucket=self.bucket)
 
     @t.override
-    async def subscribe(self, service: Service) -> ID:
+    async def subscribe(self, services: Services | Service) -> ID:
         if not self.nc.is_connected:
             raise InternalError(debug={"message": "Attempt to subscribe before nats client is connected"})
         sub_id = ID()
+
         subscribtions: list[NSubscription] = []
-        for subscriber in service.subscribers:
+        for subscriber in get_subscribers(services):
             if subscriber.js_stream is not None:
                 sub = await self.js.subscribe(
                     manual_ack=True,
@@ -123,6 +124,11 @@ class NatsMediator(Mediator):
             return fail(InternalError.from_exception(e))
 
 
+def get_subscribers(services: Services | Service) -> list[Subscriber]:
+    services_list = services.items if isinstance(services, Services) else [services]
+    return [subscriber for service in services_list for subscriber in service.subscribers]
+
+
 def get_message(cls: type[Message], message: Message | RawMessage) -> Message:
     if isinstance(message, Message):
         return message
@@ -133,7 +139,7 @@ def get_message(cls: type[Message], message: Message | RawMessage) -> Message:
     return res.value
 
 
-def get_payload(subscriber: Subscriber[t.Any], message: Message) -> Object | None:
+def get_payload(subscriber: Subscriber, message: Message) -> Object | None:
     for param in get_signature(subscriber.callback):
         if param.name == "payload" and issubclass(param.annotation, Object):
             res = param.annotation.create(message.payload.value)
@@ -143,7 +149,7 @@ def get_payload(subscriber: Subscriber[t.Any], message: Message) -> Object | Non
     return None
 
 
-async def run_callback(subscriber: Subscriber[t.Any], message: Message | RawMessage) -> Result[t.Any]:
+async def run_callback(subscriber: Subscriber, message: Message | RawMessage) -> Result[t.Any]:
     topic = message.name if isinstance(message, Message) else message.get("name")
     try:
         msg = get_message(Message, message)
@@ -159,7 +165,7 @@ async def run_callback(subscriber: Subscriber[t.Any], message: Message | RawMess
         return fail(err=InternalError.from_exception(exc, extra={"subject": topic, "message": message}))
 
 
-def wrap_callback(subscriber: Subscriber[t.Any]) -> t.Callable[[Msg], c.Awaitable[None]]:
+def wrap_callback(subscriber: Subscriber) -> t.Callable[[Msg], c.Awaitable[None]]:
     async def callback(msg: Msg):
         try:
             raw_msg: RawMessage = json.loads(msg.data.decode("utf-8"))
