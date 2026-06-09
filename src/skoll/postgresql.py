@@ -8,8 +8,8 @@ from asyncpg.connection import Connection
 from contextlib import asynccontextmanager
 from asyncpg import Record, create_pool, UniqueViolationError
 
-from .utils import from_json
 from .result import Result, is_fail
+from .utils import from_json, create_db_cursor
 from .exceptions import InternalError, NotFound, Conflict
 from .domain import Entity, DB, Repository, Criteria, ListPage
 
@@ -88,7 +88,7 @@ class PostgresRepo[T: Entity](Repository[T]):
     @t.override
     async def get(self, criteria: Criteria) -> T | None:
         try:
-            qry, params = criteria.as_sql
+            qry, params, _, _ = criteria.as_sql
             record = await self.conn.fetchrow(qry, *params)
             if not isinstance(record, Record):
                 return None
@@ -102,7 +102,7 @@ class PostgresRepo[T: Entity](Repository[T]):
     @t.override
     async def exist(self, criteria: Criteria) -> bool:
         try:
-            qry, params = criteria.as_sql
+            qry, params, _, _ = criteria.as_sql
             record = await self.conn.fetchrow(qry, *params)
             return record is not None
         except Exception as exc:
@@ -111,7 +111,7 @@ class PostgresRepo[T: Entity](Repository[T]):
     @t.override
     async def delete(self, criteria: Criteria) -> None:
         try:
-            qry, params = criteria.as_sql
+            qry, params, _, _ = criteria.as_sql
             await self.conn.execute(qry.replace("SELECT *", "DELETE"), *params)
         except Exception as exc:
             raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql})
@@ -119,7 +119,8 @@ class PostgresRepo[T: Entity](Repository[T]):
     @t.override
     async def list(self, criteria: Criteria) -> ListPage[T]:
         try:
-            qry, params = criteria.as_sql
+            qry, params, count_query, items_count = criteria.as_sql
+            count: int = items_count if items_count else t.cast(int, await self.conn.fetchval(count_query, *params))
             rows = await self.conn.fetch(qry, *params)
             items: list[T] = []
             for row in rows:
@@ -129,7 +130,10 @@ class PostgresRepo[T: Entity](Repository[T]):
                 if is_fail(res):
                     raise ValueError("Entity Parsing failed")
                 items.append(res.value)
-            return ListPage(cursor="NOOP", items=items)  # TODO: Implement cursor
+            if len(items) == criteria.limit + 1:
+                cursor = create_db_cursor(items[-1].id.value, count, criteria.limit)
+                return ListPage(cursor=cursor, items=items[:-1])
+            return ListPage(items=items)
         except Exception as exc:
             raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql})
 

@@ -6,64 +6,47 @@ import typing as t
 import collections.abc as c
 
 from ulid import ulid
-from json import loads
+from attrs import define
+from json import loads, dumps
 from zoneinfo import ZoneInfo
 from cryptography.fernet import Fernet
 from base64 import b64encode, b64decode
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
-__all__ = [
-    "to_tz",
-    "new_ulid",
-    "safe_call",
-    "from_json",
-    "serialize",
-    "impartial",
-    "unwrap_or",
-    "encode_value",
-    "decode_value",
-    "encrypt_value",
-    "decrypt_value",
-    "sanitize_dict",
-    "to_camel_case",
-    "to_snake_case",
-    "get_signature",
-    "unwrapped_call",
-    "get_config_var",
-    "string_to_snake",
-    "string_to_camel",
-    "names_from_email",
-    "iso_to_timestamp",
-    "timestamp_to_iso",
-    "to_context_manager",
-]
-
 _RE_NON_ALNUM = re.compile(r"[^a-zA-Z0-9]+")
 _RE_CAMEL_BOUNDARY_1 = re.compile(r"(.)([A-Z][a-z]+)")
 _RE_CAMEL_BOUNDARY_2 = re.compile(r"([a-z0-9])([A-Z])")
 cipher = Fernet(os.getenv("SECRET_ENCRYPTION_KEY") or "cw83X0Z5Tl90NnVhX3NhbXBsZV9rZXlfZm9yX3Rlc3RpbmdfMTI0MzU=")
 
+
+@define(kw_only=True, slots=True, frozen=True)
+class DbCursor:
+    count: int = 0
+    limit: int = 150
+    id: str | None = None
+
+
 new_ulid: t.Callable[[], str] = lambda: ulid().lower()
 
 
-def encode_value(token: str) -> str:
-    return b64encode(token.encode("utf-8")).decode("utf-8")
+def encode_value(value: str) -> str:
+    return b64encode(value.encode("utf-8")).decode("utf-8")
 
 
-def decode_value(token: str) -> str:
+def decode_value(value: str) -> str:
     try:
-        return b64decode(token, validate=True).decode("utf-8")
+        return b64decode(value, validate=True).decode("utf-8")
     except Exception:
-        return token
+        return value
 
 
-def encrypt_value(raw_token: str) -> str:
-    return cipher.encrypt(raw_token.encode("utf-8")).decode("utf-8")
+def encrypt_value(value: str) -> str:
+    return cipher.encrypt(value.encode("utf-8")).decode("utf-8")
 
 
-def decrypt_value(encrypted_token: str) -> str:
-    return cipher.decrypt(encrypted_token.encode("utf-8")).decode("utf-8")
+def decrypt_value(value: str) -> str:
+    return cipher.decrypt(value.encode("utf-8")).decode("utf-8")
 
 
 def from_json(val: t.Any) -> t.Any:
@@ -236,3 +219,45 @@ def unwrap_or[T](value: T | None, default: T, invalid: c.Collection[t.Any] | Non
     if value is None or (invalid is not None and value in invalid):
         return default
     return value
+
+
+def create_db_cursor(id: str, count: int, limit: int) -> str:
+    return encode_value(dumps({"id": id, "count": count, "limit": limit}))
+
+
+def parse_db_cursor(cursor: str) -> DbCursor:
+    try:
+        decoded = decode_value(cursor)
+        data = loads(decoded)
+        return DbCursor(**data)
+    except:
+        return DbCursor()
+
+
+__all__ = [
+    "to_tz",
+    "new_ulid",
+    "safe_call",
+    "from_json",
+    "serialize",
+    "impartial",
+    "unwrap_or",
+    "encode_value",
+    "decode_value",
+    "encrypt_value",
+    "decrypt_value",
+    "sanitize_dict",
+    "to_camel_case",
+    "to_snake_case",
+    "get_signature",
+    "unwrapped_call",
+    "get_config_var",
+    "string_to_snake",
+    "string_to_camel",
+    "parse_db_cursor",
+    "names_from_email",
+    "iso_to_timestamp",
+    "timestamp_to_iso",
+    "create_db_cursor",
+    "to_context_manager",
+]
