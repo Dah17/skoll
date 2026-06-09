@@ -8,6 +8,8 @@ import collections.abc as c
 from ulid import ulid
 from json import loads
 from zoneinfo import ZoneInfo
+from cryptography.fernet import Fernet
+from base64 import b64encode, b64decode
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
@@ -19,6 +21,10 @@ __all__ = [
     "serialize",
     "impartial",
     "unwrap_or",
+    "encode_value",
+    "decode_value",
+    "encrypt_value",
+    "decrypt_value",
     "sanitize_dict",
     "to_camel_case",
     "to_snake_case",
@@ -36,8 +42,28 @@ __all__ = [
 _RE_NON_ALNUM = re.compile(r"[^a-zA-Z0-9]+")
 _RE_CAMEL_BOUNDARY_1 = re.compile(r"(.)([A-Z][a-z]+)")
 _RE_CAMEL_BOUNDARY_2 = re.compile(r"([a-z0-9])([A-Z])")
+cipher = Fernet(os.getenv("SECRET_ENCRYPTION_KEY") or "cw83X0Z5Tl90NnVhX3NhbXBsZV9rZXlfZm9yX3Rlc3RpbmdfMTI0MzU=")
 
 new_ulid: t.Callable[[], str] = lambda: ulid().lower()
+
+
+def encode_value(token: str) -> str:
+    return b64encode(token.encode("utf-8")).decode("utf-8")
+
+
+def decode_value(token: str) -> str:
+    try:
+        return b64decode(token, validate=True).decode("utf-8")
+    except Exception:
+        return token
+
+
+def encrypt_value(raw_token: str) -> str:
+    return cipher.encrypt(raw_token.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_value(encrypted_token: str) -> str:
+    return cipher.decrypt(encrypted_token.encode("utf-8")).decode("utf-8")
 
 
 def from_json(val: t.Any) -> t.Any:

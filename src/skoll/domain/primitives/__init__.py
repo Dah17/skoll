@@ -7,7 +7,7 @@ from skoll.exceptions import InvalidField
 from skoll.result import Result, ok, fail
 from datetime import datetime, timedelta, UTC
 from skoll.constants import CURRENCIES, COUNTRY_CODES
-from skoll.utils import new_ulid, to_tz, to_snake_case, safe_call
+from skoll.utils import new_ulid, to_tz, to_snake_case, safe_call, encrypt_value, decrypt_value
 
 from .object import Object, Enum
 
@@ -22,6 +22,7 @@ __all__ = [
     "Time",
     "Enum",
     "Email",
+    "Secret",
     "Object",
     "Locale",
     "Timezone",
@@ -423,3 +424,26 @@ class CountryCode(Object):
                 hints={"received": raw, "expected": "Country Code (e.g., US, UK)"},
             )
         )
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class Secret(Object):
+
+    value: str
+
+    @property
+    def decrypted_value(self) -> str:
+        return decrypt_value(self.value)
+
+    @classmethod
+    @t.override
+    def prepare(cls, raw: str):
+        value = safe_call(str, raw)
+        value = value.strip() if value is not None else None
+        if value is None:
+            return fail(
+                InvalidField(
+                    field=to_snake_case(cls.__name__), hints={"received": raw, "expected": "a non-empty string"}
+                )
+            )
+        return ok(encrypt_value(value) if safe_call(decrypt_value, value) is None else value)
