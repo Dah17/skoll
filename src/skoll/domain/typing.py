@@ -2,7 +2,7 @@ import typing as t
 
 from attrs import define, field
 from abc import ABC, abstractmethod
-from src.skoll.utils.functional import parse_db_cursor
+from skoll.utils.functional import parse_db_cursor
 
 from .primitives import ID
 

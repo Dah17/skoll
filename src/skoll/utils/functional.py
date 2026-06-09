@@ -42,10 +42,12 @@ def decode_value(value: str) -> str:
 
 
 def encrypt_value(value: str) -> str:
+    cipher = Fernet(os.getenv("SECRET_ENCRYPTION_KEY") or "")
     return cipher.encrypt(value.encode("utf-8")).decode("utf-8")
 
 
 def decrypt_value(value: str) -> str:
+    cipher = Fernet(os.getenv("SECRET_ENCRYPTION_KEY") or "")
     return cipher.decrypt(value.encode("utf-8")).decode("utf-8")
 
 
