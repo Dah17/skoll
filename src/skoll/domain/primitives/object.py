@@ -9,7 +9,6 @@ from skoll.utils import to_snake_case, serialize
 from skoll.exceptions import MissingField, InvalidField, Error
 from skoll.result import Result, fail, ok, combine, is_fail, is_ok
 
-
 __all__ = ["Enum", "Object"]
 
 
@@ -69,6 +68,7 @@ class Object(ABC):
             return prepare_result
 
         schema = get_schema(cls)
+        print("Schema of ", cls.__name__, ": ", schema)
         if schema is None:
             return cls._init(prepare_result.value)
 
@@ -151,10 +151,10 @@ def get_schema(cls: type[t.Any]) -> dict[str, _SchemaItem] | None:
     for key, attr in attrs.fields_dict(cls).items():
         is_list, optional, _cls = False, type(None) in t.get_args(attr.type), attr.type
         if t.get_origin(_cls) == UnionType:
-            _cls = t.get_args(attr.type)[0]
+            _cls = t.get_args(_cls)[0]
         if t.get_origin(_cls) == list:
             is_list = True
-            _cls = t.get_args(attr.type)[0]
+            _cls = t.get_args(_cls)[0]
 
         schema[key] = _SchemaItem(key=key, cls=_cls, is_list=is_list, optional=optional, default=attr.default)
     return schema

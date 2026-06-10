@@ -17,7 +17,6 @@ from contextlib import asynccontextmanager
 _RE_NON_ALNUM = re.compile(r"[^a-zA-Z0-9]+")
 _RE_CAMEL_BOUNDARY_1 = re.compile(r"(.)([A-Z][a-z]+)")
 _RE_CAMEL_BOUNDARY_2 = re.compile(r"([a-z0-9])([A-Z])")
-cipher = Fernet(os.getenv("SECRET_ENCRYPTION_KEY") or "cw83X0Z5Tl90NnVhX3NhbXBsZV9rZXlfZm9yX3Rlc3RpbmdfMTI0MzU=")
 
 
 @define(kw_only=True, slots=True, frozen=True)

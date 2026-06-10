@@ -120,7 +120,7 @@ class PostgresRepo[T: Entity](Repository[T]):
     async def list(self, criteria: Criteria) -> ListPage[T]:
         try:
             qry, params, count_query, items_count = criteria.as_sql
-            count: int = items_count if items_count else t.cast(int, await self.conn.fetchval(count_query, *params))
+            count: int = items_count if items_count else t.cast(int, await self.conn.fetchval(count_query))
             rows = await self.conn.fetch(qry, *params)
             items: list[T] = []
             for row in rows:
