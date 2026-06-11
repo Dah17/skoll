@@ -3,7 +3,6 @@ from attrs import define
 
 from .exceptions import Error, InvalidField
 
-
 __all__ = ["Result", "ok", "fail", "is_ok", "is_fail", "combine"]
 
 

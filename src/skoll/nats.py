@@ -158,7 +158,6 @@ async def run_callback(subscriber: Subscriber, message: Message | RawMessage) ->
             "context": msg.context,
             "payload": get_payload(subscriber, msg),
         }
-        print(f"Resolving dependencies for callback {subscriber.callback}")
         return await call_with_dependencies(subscriber.callback, cxt)
     except Error as err:
         return fail(err=err)

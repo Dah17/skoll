@@ -3,7 +3,6 @@ import typing as t
 
 from skoll.utils import sanitize_dict
 
-
 __all__ = [
     "Error",
     "NotFound",

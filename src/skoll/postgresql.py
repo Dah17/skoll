@@ -51,6 +51,11 @@ class PostgresDB(DB[Connection]):
                 self.__pool = await create_pool(
                     dsn=self.dsn, min_size=self.__min_pool_size, max_size=self.__max_pool_size
                 )
+                # --- FORCE POOL WARM UP ---
+                # This forces asyncpg to physically test and open a connection
+                # ensuring all system tables/relations are loaded before Starlette boots.
+                async with self.__pool.acquire() as conn:
+                    await conn.execute("SELECT 1;")
             except Exception as exc:
                 raise InternalError.from_exception(exc)
 
