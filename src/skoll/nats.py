@@ -152,14 +152,13 @@ def get_payload(subscriber: Subscriber, message: Message) -> Object | None:
 async def run_callback(subscriber: Subscriber, message: Message | RawMessage) -> Result[t.Any]:
     topic = message.name if isinstance(message, Message) else message.get("name")
     try:
-        print(f"Received message on topic {topic} {message}")
         msg = get_message(Message, message)
         cxt: dict[str, t.Any] = {
             "msg": msg,
             "context": msg.context,
             "payload": get_payload(subscriber, msg),
         }
-        print(f"Running callback for topic {topic} with context {cxt}")
+        print(f"Resolving dependencies for callback {subscriber.callback}")
         return await call_with_dependencies(subscriber.callback, cxt)
     except Error as err:
         return fail(err=err)
