@@ -115,14 +115,12 @@ class NatsMediator(Mediator):
                 subject, json.dumps(payload).encode("utf-8"), timeout=self.default_req_timeout
             )
             raw_msg = json.loads(response.data.decode("utf-8"))
-            print(f"Received response for subject {subject}: {raw_msg}")
             if raw_msg.get("error") is not None:
                 return fail(Error.from_dict(raw_msg["error"]))
             return ok(raw_msg.get("data"))
         except TimeoutError as e:
             return fail(InternalError.from_exception(e, extra={"message": f"Request timed out"}))
         except Exception as e:
-            print("NATS request error: ", e)
             return fail(InternalError.from_exception(e))
 
 
@@ -162,10 +160,8 @@ async def run_callback(subscriber: Subscriber, message: Message | RawMessage) ->
         }
         return await call_with_dependencies(subscriber.callback, cxt)
     except Error as err:
-        print(f"ERR: Nat callback  error for topic {topic}: {str(err)}")
         return fail(err=err)
     except Exception as exc:
-        print(f"EXC: Nat callback  error for topic {topic}: {str(exc)}")
         return fail(err=InternalError.from_exception(exc, extra={"subject": topic, "message": message}))
 
 
@@ -174,7 +170,6 @@ def wrap_callback(subscriber: Subscriber) -> t.Callable[[Msg], c.Awaitable[None]
         try:
             raw_msg: RawMessage = json.loads(msg.data.decode("utf-8"))
             result = await run_callback(subscriber, raw_msg)
-            print(f"Callback result for topic {subscriber.topic}: {result}")
             if subscriber.will_reply:
                 raw_response = {
                     "data": result.value if is_ok(result) else None,
