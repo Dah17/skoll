@@ -30,7 +30,9 @@ async def call_with_dependencies[T](fn: BaseFn[T], context: Context | None = Non
     async with AsyncExitStack() as stack:
         kwargs = await resolve(fn, cache={}, context=context or {}, exit_stack=stack, no_call=True)
         print(f"Calling function {fn.__name__} with resolved dependencies: {kwargs}")
-        return await fn(**kwargs)
+        res = await fn(**kwargs)
+        print(f"Function {fn.__name__} returned: {res}")
+        return res
 
 
 def get_dependant(annotation: t.Any) -> Dependent | None:
@@ -53,11 +55,8 @@ async def resolve(
     kwargs: dict[str, t.Any] = {}
 
     for param in get_signature(fn):
-        print(f"Resolving dependency for parameter {param.name} of type {param.annotation} for function {fn.__name__}")
-        print(f"Found in the current context: {context.get(param.name)}")
         if context.get(param.name) is not None:
             kwargs[param.name] = context[param.name]
-            print(f"Resolved {param.name}, current kwargs are:  {kwargs}")
             continue
 
         dep = get_dependant(param.annotation)
@@ -66,7 +65,6 @@ async def resolve(
             continue
 
         if param.default is inspect.Parameter.empty:
-            # print(f"Unresolvable dependency parameter: {param.name} {context}")
             raise TypeError(f"Unable to resolve dependency parameter: {param.name}")
 
         kwargs[param.name] = param.default

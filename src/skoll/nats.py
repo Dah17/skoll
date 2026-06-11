@@ -160,8 +160,10 @@ async def run_callback(subscriber: Subscriber, message: Message | RawMessage) ->
         }
         return await call_with_dependencies(subscriber.callback, cxt)
     except Error as err:
+        print(f"ERR: Nat callback  error for topic {topic}: {str(err)}")
         return fail(err=err)
     except Exception as exc:
+        print(f"EXC: Nat callback  error for topic {topic}: {str(exc)}")
         return fail(err=InternalError.from_exception(exc, extra={"subject": topic, "message": message}))
 
 
