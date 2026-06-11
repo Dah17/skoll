@@ -29,9 +29,7 @@ def depend(call: t.Callable[..., t.Any]) -> Dependent:
 async def call_with_dependencies[T](fn: BaseFn[T], context: Context | None = None) -> T:
     async with AsyncExitStack() as stack:
         kwargs = await resolve(fn, cache={}, context=context or {}, exit_stack=stack, no_call=True)
-        print(f"Calling function {fn.__name__} with resolved dependencies: {kwargs}")
         res = await fn(**kwargs)
-        print(f"Function {fn.__name__} returned: {res}")
         return res
 
 

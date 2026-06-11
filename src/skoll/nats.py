@@ -115,12 +115,14 @@ class NatsMediator(Mediator):
                 subject, json.dumps(payload).encode("utf-8"), timeout=self.default_req_timeout
             )
             raw_msg = json.loads(response.data.decode("utf-8"))
+            print(f"Received response for subject {subject}: {raw_msg}")
             if raw_msg.get("error") is not None:
                 return fail(Error.from_dict(raw_msg["error"]))
             return ok(raw_msg.get("data"))
         except TimeoutError as e:
             return fail(InternalError.from_exception(e, extra={"message": f"Request timed out"}))
         except Exception as e:
+            print("NATS request error: ", e)
             return fail(InternalError.from_exception(e))
 
 
@@ -145,7 +147,7 @@ def get_payload(subscriber: Subscriber, message: Message) -> Object | None:
             res = param.annotation.create(message.payload.value)
             if is_fail(res):
                 raise ValidationFailed(errors=res.err.errors)
-            return message.unwrap_payload(param.annotation)
+            return res.value
     return None
 
 
