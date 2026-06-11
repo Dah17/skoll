@@ -68,7 +68,6 @@ class Object(ABC):
             return prepare_result
 
         schema = get_schema(cls)
-        print("Schema of ", cls.__name__, ": ", schema)
         if schema is None:
             return cls._init(prepare_result.value)
 

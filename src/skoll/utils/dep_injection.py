@@ -62,6 +62,7 @@ async def resolve(
             continue
 
         if param.default is inspect.Parameter.empty:
+            print(f"Unresolvable dependency parameter: {param.name} {context}")
             raise TypeError(f"Unresolvable dependency parameter: {param.name}")
 
         kwargs[param.name] = param.default
