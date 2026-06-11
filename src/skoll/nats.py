@@ -174,6 +174,7 @@ def wrap_callback(subscriber: Subscriber) -> t.Callable[[Msg], c.Awaitable[None]
         try:
             raw_msg: RawMessage = json.loads(msg.data.decode("utf-8"))
             result = await run_callback(subscriber, raw_msg)
+            print(f"Callback result for topic {subscriber.topic}: {result}")
             if subscriber.will_reply:
                 raw_response = {
                     "data": result.value if is_ok(result) else None,
