@@ -5,7 +5,7 @@ from types import UnionType
 from enum import Enum as _Enum
 
 
-from skoll.utils import to_snake_case, serialize
+from skoll.utils import to_snake_case, serialize, safe_call
 from skoll.exceptions import MissingField, InvalidField, Error
 from skoll.result import Result, fail, ok, combine, is_fail, is_ok
 
@@ -131,13 +131,17 @@ class _SchemaItem:
         type_checkers: dict[type[t.Any], t.Callable[[t.Any], bool]] = {
             bool: lambda x: x in ["True", "False", True, False],
             str: lambda x: isinstance(x, (str, float, int)),
-            int: lambda x: isinstance(x, (int, float)),
-            float: lambda x: isinstance(x, (float, int)),
+            int: lambda x: isinstance(x, (int, float, str)),
+            float: lambda x: isinstance(x, (float, int, str)),
         }
         check = type_checkers.get(self.cls)
 
-        if check is None or check(raw) is True:
-            return ok(raw if check is None else self.cls(raw))
+        if check is None:
+            return ok(raw)
+        if check(raw) is True:
+            value = safe_call(self.cls, raw)
+            if value:
+                return ok(value)
 
         return fail(InvalidField(field=field, hints={"expected": self.cls.__name__, "received": raw}))
 
