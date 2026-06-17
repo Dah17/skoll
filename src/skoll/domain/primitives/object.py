@@ -140,7 +140,7 @@ class _SchemaItem:
             return ok(raw)
         if check(raw) is True:
             value = safe_call(self.cls, raw)
-            if value:
+            if value is not None:
                 return ok(value)
 
         return fail(InvalidField(field=field, hints={"expected": self.cls.__name__, "received": raw}))
