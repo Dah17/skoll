@@ -235,6 +235,15 @@ def parse_db_cursor(cursor: str) -> DbCursor:
         return DbCursor()
 
 
+def to_paginated_output(
+    items: list[t.Any], limit: int, prev_cursor: str | None = None, next_cursor: str | None = None
+) -> dict[str, t.Any]:
+    p_cursor = parse_db_cursor(prev_cursor) if prev_cursor else None
+    n_cursor = parse_db_cursor(next_cursor) if next_cursor else None
+    count = (p_cursor and p_cursor.count) or (n_cursor and n_cursor.count) or len(items)
+    return {"items": items, "next_cursor": next_cursor, "limit": limit, "total_count": count}
+
+
 __all__ = [
     "to_tz",
     "new_ulid",
@@ -261,4 +270,5 @@ __all__ = [
     "timestamp_to_iso",
     "create_db_cursor",
     "to_context_manager",
+    "to_paginated_output",
 ]

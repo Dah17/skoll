@@ -34,6 +34,7 @@ class SQLCriteria(t.NamedTuple):
     query: str
     params: list[t.Any]
     count_query: str
+    count_params: list[t.Any]
     items_count: int | None = None
 
     @classmethod
@@ -46,9 +47,10 @@ class SQLCriteria(t.NamedTuple):
 
         where_clause = " AND ".join(attr[0] for attr in attrs) if len(attrs) > 0 else "1=1"
         query = f"{prefix} FROM {table} WHERE {where_clause} ORDER BY id ASC LIMIT ${len(attrs) + 1}"
-        params = [value for _, value in attrs] + [crt.limit + 1]
+        count_params = [value for _, value in attrs]
+        params = count_params + [crt.limit + 1]
         count_query = f"SELECT COUNT(*) FROM {table} WHERE {where_clause}"
-        return cls(query, params, count_query, items_count=cursor.count if cursor else None)
+        return cls(query, params, count_query, count_params=count_params, items_count=cursor.count if cursor else None)
 
 
 @define(frozen=True, kw_only=True, slots=True)

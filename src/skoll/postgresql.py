@@ -88,7 +88,7 @@ class PostgresRepo[T: Entity](Repository[T]):
     @t.override
     async def get(self, criteria: Criteria) -> T | None:
         try:
-            qry, params, _, _ = criteria.as_sql
+            qry, params, _, _, _ = criteria.as_sql
             record = await self.conn.fetchrow(qry, *params)
             if not isinstance(record, Record):
                 return None
@@ -102,7 +102,7 @@ class PostgresRepo[T: Entity](Repository[T]):
     @t.override
     async def exist(self, criteria: Criteria) -> bool:
         try:
-            qry, params, _, _ = criteria.as_sql
+            qry, params, _, _, _ = criteria.as_sql
             record = await self.conn.fetchrow(qry, *params)
             return record is not None
         except Exception as exc:
@@ -111,7 +111,7 @@ class PostgresRepo[T: Entity](Repository[T]):
     @t.override
     async def delete(self, criteria: Criteria) -> None:
         try:
-            qry, params, _, _ = criteria.as_sql
+            qry, params, _, _, _ = criteria.as_sql
             await self.conn.execute(qry.replace("SELECT *", "DELETE"), *params)
         except Exception as exc:
             raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql})
@@ -119,8 +119,10 @@ class PostgresRepo[T: Entity](Repository[T]):
     @t.override
     async def list(self, criteria: Criteria) -> ListPage[T]:
         try:
-            qry, params, count_query, items_count = criteria.as_sql
-            count: int = items_count if items_count else t.cast(int, await self.conn.fetchval(count_query))
+            qry, params, count_query, count_params, items_count = criteria.as_sql
+            count: int = (
+                items_count if items_count else t.cast(int, await self.conn.fetchval(count_query, *count_params))
+            )
             rows = await self.conn.fetch(qry, *params)
             items: list[T] = []
             for row in rows:
