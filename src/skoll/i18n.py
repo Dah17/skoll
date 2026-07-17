@@ -2,7 +2,6 @@ import typing as t
 from json import load
 from skoll.domain import Locale
 
-
 __all__ = ["I18n"]
 
 

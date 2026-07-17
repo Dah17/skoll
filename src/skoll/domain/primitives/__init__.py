@@ -11,7 +11,7 @@ from skoll.utils import new_ulid, to_tz, to_snake_case, safe_call, encrypt_value
 
 from .object import Object, Enum
 
-ID_REGEX = r"^[0-9a-z]{26}$"
+ULID_REGEX = r"^[0-9a-z]{26}$"
 EMAIL_REGEX = r"^[^@]+@[^@]+$"
 TIME_REGEX = r"^(?:[01]?[0-9]|2[0-3]):[0-5][0-9]$"
 LOCALE_PATTERN = r"^[a-z]{2,3}(-[A-Z][a-z]{3})?(-[A-Z]{2}|-[0-9]{3})?$"
@@ -21,6 +21,7 @@ __all__ = [
     "Map",
     "Time",
     "Enum",
+    "Ulid",
     "Email",
     "Secret",
     "Object",
@@ -39,18 +40,24 @@ __all__ = [
 @define(kw_only=True, slots=True, frozen=True)
 class ID(Object):
 
+    value: str
+
+
+@define(kw_only=True, slots=True, frozen=True)
+class Ulid(ID):
+
     value: str = field(factory=lambda: new_ulid())
 
     @t.override
     @classmethod
     def prepare(cls, raw: t.Any) -> Result[t.Any]:
         value = (safe_call(str, raw) or "").strip()
-        if value and re.fullmatch(ID_REGEX, value) is not None:
+        if value and re.fullmatch(ULID_REGEX, value) is not None:
             return ok(value)
         return fail(
             InvalidField(
                 field=to_snake_case(cls.__name__),
-                hints={"expected": "string", "contraints": {"pattern": ID_REGEX}, "received": raw},
+                hints={"expected": "string", "contraints": {"pattern": ULID_REGEX}, "received": raw},
             )
         )
 

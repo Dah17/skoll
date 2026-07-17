@@ -13,7 +13,7 @@ from .config import SSL
 from .result import Result, fail, ok, is_ok, is_fail
 from .utils import call_with_dependencies, get_signature
 from .exceptions import Error, InternalError, ValidationFailed
-from .domain import Message, ID, RawMessage, Subscriber, Service, Services, Mediator, KVStore, KVBucket, Object
+from .domain import Message, Ulid, ID, Subscriber, Service, Services, Mediator, KVStore, KVBucket, Object
 
 __all__ = ["NatsMediator"]
 
@@ -51,14 +51,14 @@ class NatsMediator(Mediator):
     async def subscribe(self, services: Services | Service) -> ID:
         if not self.nc.is_connected:
             raise InternalError(debug={"message": "Attempt to subscribe before nats client is connected"})
-        sub_id = ID()
+        sub_id = Ulid()
 
-        subscribtions: list[NSubscription] = []
+        subscriptions: list[NSubscription] = []
         for subscriber in get_subscribers(services):
             if subscriber.js_stream is not None:
                 sub = await self.js.subscribe(
                     manual_ack=True,
-                    subject=subscriber.topic,
+                    subject=subscriber.subject,
                     stream=subscriber.js_stream,
                     cb=wrap_callback(subscriber),
                     durable=subscriber.service_name,
@@ -66,12 +66,12 @@ class NatsMediator(Mediator):
                 )
             else:
                 sub = await self.nc.subscribe(
-                    subject=subscriber.topic,
+                    subject=subscriber.subject,
                     cb=wrap_callback(subscriber),
                     queue=subscriber.service_name if subscriber.queued else "",
                 )
-            subscribtions.append(sub)
-        self.subscriptions[sub_id.value] = subscribtions
+            subscriptions.append(sub)
+        self.subscriptions[sub_id.value] = subscriptions
         return sub_id
 
     @t.override
@@ -102,17 +102,15 @@ class NatsMediator(Mediator):
             await self.nc.drain()
 
     @t.override
-    async def publish(self, *msg: Message | RawMessage) -> None:
+    async def publish(self, *msg: Message) -> None:
         for m in msg:
-            subject, payload = (m.name, m.serialize()) if isinstance(m, Message) else (m["name"], m)
-            await self.nc.publish(subject, json.dumps(payload).encode("utf-8"))
+            await self.nc.publish(m.subject, json.dumps(m.serialize()).encode("utf-8"))
 
     @t.override
-    async def request(self, msg: Message | RawMessage) -> Result[t.Any]:
+    async def request(self, msg: Message) -> Result[t.Any]:
         try:
-            subject, payload = (msg.name, msg.serialize()) if isinstance(msg, Message) else (msg["name"], msg)
             response = await self.nc.request(
-                subject, json.dumps(payload).encode("utf-8"), timeout=self.default_req_timeout
+                msg.subject, json.dumps(msg.serialize()).encode("utf-8"), timeout=self.default_req_timeout
             )
             raw_msg = json.loads(response.data.decode("utf-8"))
             if raw_msg.get("error") is not None:
@@ -129,16 +127,6 @@ def get_subscribers(services: Services | Service) -> list[Subscriber]:
     return [subscriber for service in services_list for subscriber in service.subscribers]
 
 
-def get_message(cls: type[Message], message: Message | RawMessage) -> Message:
-    if isinstance(message, Message):
-        return message
-    res = cls.create(raw=message)
-    if is_fail(res):
-        raise ValidationFailed(errors=res.err.errors)
-
-    return res.value
-
-
 def get_payload(subscriber: Subscriber, message: Message) -> Object | None:
     for param in get_signature(subscriber.callback):
         if param.name == "payload" and issubclass(param.annotation, Object):
@@ -149,27 +137,27 @@ def get_payload(subscriber: Subscriber, message: Message) -> Object | None:
     return None
 
 
-async def run_callback(subscriber: Subscriber, message: Message | RawMessage) -> Result[t.Any]:
-    topic = message.name if isinstance(message, Message) else message.get("name")
+async def run_callback(subscriber: Subscriber, message: Message) -> Result[t.Any]:
     try:
-        msg = get_message(Message, message)
         cxt: dict[str, t.Any] = {
-            "msg": msg,
-            "context": msg.context,
-            "payload": get_payload(subscriber, msg),
+            "msg": message,
+            "context": message.context,
+            "payload": message.payload,
         }
         return await call_with_dependencies(subscriber.callback, cxt)
     except Error as err:
         return fail(err=err)
     except Exception as exc:
-        return fail(err=InternalError.from_exception(exc, extra={"subject": topic, "message": message}))
+        return fail(err=InternalError.from_exception(exc, extra={"subject": message.subject, "message": message}))
 
 
 def wrap_callback(subscriber: Subscriber) -> t.Callable[[Msg], c.Awaitable[None]]:
     async def callback(msg: Msg):
         try:
-            raw_msg: RawMessage = json.loads(msg.data.decode("utf-8"))
-            result = await run_callback(subscriber, raw_msg)
+            data_res = Message.create(raw=json.loads(msg.data.decode("utf-8")))
+            if is_fail(data_res):
+                raise ValidationFailed(errors=data_res.err.errors)
+            result = await run_callback(subscriber, data_res.value)
             if subscriber.will_reply:
                 raw_response = {
                     "data": result.value if is_ok(result) else None,

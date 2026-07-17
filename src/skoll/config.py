@@ -4,7 +4,7 @@ from skoll.utils import get_config_var
 from ssl import create_default_context
 from certifi import where as ssl_where
 
-__all__ = ["SMTPConfig", "JwtConfig", "SSL"]
+__all__ = ["SMTPConfig", "SSL"]
 
 
 @define(kw_only=True, slots=True, frozen=True)
@@ -21,18 +21,5 @@ class SMTPConfig:
     start_tls: bool = field(factory=lambda: bool(get_config_var(keys=["SMTP_START_TLS"], default="False")))
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class JwtConfig:
-
-    DEFAULT: t.ClassVar[t.Self]
-
-    issuer: str = field(factory=get_config_var(keys=["JWT_TOKEN_ISSUER"], default=""))
-    encode_key: str = field(factory=get_config_var(keys=["JWT_HASH_SECRET"], default=""))
-    decode_key: str = field(factory=get_config_var(keys=["JWT_HASH_SECRET"], default=""))
-    audience: str = field(factory=get_config_var(keys=["JWT_TOKEN_AUDIENCE"], default=""))
-    algorithm: str = field(factory=get_config_var(keys=["JWT_ALGORITHM"], default="HS256"))
-
-
-JwtConfig.DEFAULT = JwtConfig()
 SMTPConfig.DEFAULT = SMTPConfig()
 SSL = create_default_context(cafile=ssl_where())

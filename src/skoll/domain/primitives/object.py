@@ -92,8 +92,7 @@ class _SchemaItem:
     """
 
     key: str
-    cls: t.Any
-    is_list: bool = False
+    types: tuple[t.Any, ...]
     optional: bool = False
     default: t.Any = attrs.NOTHING
 
@@ -110,23 +109,99 @@ class _SchemaItem:
             return ok(value=None)
         if raw_item is None:
             return fail(MissingField(field=self.key))
-        if self.is_list and isinstance(raw_item, list):
+
+        errors: list[Result[t.Any]] = []
+        for item_type in self.types:
+            res = self._create(raw=raw_item, cls=item_type, field=self.key)
+            if is_ok(res):
+                return res
+            errors.append(res)
+
+        return fail(
+            InvalidField(
+                field=self.key,
+                hints={
+                    "expected": [_type_to_name(item_type) for item_type in self.types],
+                    "received": raw_item,
+                },
+            )
+        )
+
+    def _create(self, raw: t.Any, cls: t.Any, field: str | None = None) -> Result[t.Any]:
+        field = field or self.key
+        origin = t.get_origin(cls)
+        args = t.get_args(cls)
+
+        if origin == list:
+            if not isinstance(raw, list):
+                return fail(InvalidField(field=field))
+            item_type = args[0] if len(args) == 1 else t.Any
             results: list[Result[t.Any]] = []
-            for idx, rw in enumerate(t.cast(list[t.Any], raw_item)):
-                res = self._create(raw=rw, field=f"{self.key}[{idx}]")
-                results.append(res)
+            for idx, value in enumerate(t.cast(list[t.Any], raw)):
+                results.append(self._create(raw=value, cls=item_type, field=f"{field}[{idx}]"))
             res = combine(results)
             if is_fail(res):
-                res.err.field = self.key
+                res.err.field = field
             return res
-        if self.is_list and not isinstance(raw_item, list):
-            return fail(InvalidField(field=self.key))
-        return self._create(raw=raw_item)
 
-    def _create(self, raw: t.Any, field: str | None = None) -> Result[t.Any]:
-        field = field or self.key
-        if hasattr(self.cls, "create") and callable(getattr(self.cls, "create")):
-            return self.cls.create(raw)
+        if origin == dict:
+            if not isinstance(raw, dict):
+                return fail(InvalidField(field=field))
+            key_type = args[0] if len(args) >= 1 else t.Any
+            value_type = args[1] if len(args) >= 2 else t.Any
+            parsed: dict[t.Any, t.Any] = {}
+            for raw_key, raw_value in t.cast(dict[t.Any, t.Any], raw).items():
+                key_res = self._create(raw=raw_key, cls=key_type, field=f"{field}.key")
+                if is_fail(key_res):
+                    return key_res
+                value_res = self._create(raw=raw_value, cls=value_type, field=f"{field}[{raw_key}]")
+                if is_fail(value_res):
+                    return value_res
+                parsed[key_res.value] = value_res.value
+            return ok(parsed)
+
+        if origin == tuple:
+            if not isinstance(raw, tuple):
+                return fail(InvalidField(field=field))
+            raw_tuple = t.cast(tuple[t.Any, ...], raw)
+            if len(args) == 2 and args[1] is Ellipsis:
+                item_type = args[0]
+                results = [
+                    self._create(raw=value, cls=item_type, field=f"{field}[{idx}]")
+                    for idx, value in enumerate(raw_tuple)
+                ]
+                res = combine(results)
+                if is_fail(res):
+                    res.err.field = field
+                    return res
+                return ok(tuple(res.value))
+            if args and len(args) != len(raw_tuple):
+                return fail(InvalidField(field=field))
+
+            result_values: list[t.Any] = []
+            for idx, value in enumerate(raw_tuple):
+                item_type = args[idx] if args else t.Any
+                res = self._create(raw=value, cls=item_type, field=f"{field}[{idx}]")
+                if is_fail(res):
+                    return res
+                result_values.append(res.value)
+            return ok(tuple(result_values))
+
+        if origin == UnionType:
+            union_types = tuple(item for item in args if item is not type(None))
+            for item_type in union_types:
+                res = self._create(raw=raw, cls=item_type, field=field)
+                if is_ok(res):
+                    return res
+            return fail(InvalidField(field=field))
+
+        if hasattr(cls, "create") and callable(getattr(cls, "create")):
+            return cls.create(raw)
+
+        if cls in {list, dict, tuple}:
+            if isinstance(raw, cls):
+                return ok(raw)
+            return fail(InvalidField(field=field, hints={"expected": cls.__name__, "received": raw}))
 
         type_checkers: dict[type[t.Any], t.Callable[[t.Any], bool]] = {
             bool: lambda x: x in ["True", "False", True, False],
@@ -134,16 +209,50 @@ class _SchemaItem:
             int: lambda x: isinstance(x, (int, float, str)),
             float: lambda x: isinstance(x, (float, int, str)),
         }
-        check = type_checkers.get(self.cls)
+        check = type_checkers.get(cls)
 
         if check is None:
             return ok(raw)
         if check(raw) is True:
-            value = safe_call(self.cls, raw)
+            value = safe_call(cls, raw)
             if value is not None:
                 return ok(value)
 
-        return fail(InvalidField(field=field, hints={"expected": self.cls.__name__, "received": raw}))
+        return fail(InvalidField(field=field, hints={"expected": cls.__name__, "received": raw}))
+
+
+def _split_types(tp: t.Any) -> tuple[t.Any, ...]:
+    origin = t.get_origin(tp)
+    if origin == UnionType:
+        types: list[t.Any] = []
+        for item in t.get_args(tp):
+            types.extend(_split_types(item))
+        return tuple(types)
+    return (tp,)
+
+
+def _type_to_name(tp: t.Any) -> str:
+    origin = t.get_origin(tp)
+    args = t.get_args(tp)
+    if origin == list:
+        item = _type_to_name(args[0]) if args else "Any"
+        return f"list[{item}]"
+    if origin == dict:
+        key = _type_to_name(args[0]) if len(args) >= 1 else "Any"
+        value = _type_to_name(args[1]) if len(args) >= 2 else "Any"
+        return f"dict[{key}, {value}]"
+    if origin == tuple:
+        if len(args) == 2 and args[1] is Ellipsis:
+            return f"tuple[{_type_to_name(args[0])}, ...]"
+        values = ", ".join(_type_to_name(item) for item in args) if args else ""
+        return f"tuple[{values}]" if values else "tuple"
+    if origin == UnionType:
+        return " | ".join(_type_to_name(item) for item in args)
+    if tp is type(None):
+        return "None"
+    if hasattr(tp, "__name__"):
+        return tp.__name__
+    return str(tp)
 
 
 def get_schema(cls: type[t.Any]) -> dict[str, _SchemaItem] | None:
@@ -152,12 +261,13 @@ def get_schema(cls: type[t.Any]) -> dict[str, _SchemaItem] | None:
 
     schema: dict[str, _SchemaItem] = {}
     for key, attr in attrs.fields_dict(cls).items():
-        is_list, optional, _cls = False, type(None) in t.get_args(attr.type), attr.type
-        if t.get_origin(_cls) == UnionType:
-            _cls = t.get_args(_cls)[0]
-        if t.get_origin(_cls) == list:
-            is_list = True
-            _cls = t.get_args(_cls)[0]
-
-        schema[key] = _SchemaItem(key=key, cls=_cls, is_list=is_list, optional=optional, default=attr.default)
+        variants = _split_types(attr.type)
+        optional = type(None) in variants
+        types = tuple(item for item in variants if item is not type(None))
+        schema[key] = _SchemaItem(
+            key=key,
+            optional=optional,
+            default=attr.default,
+            types=types if types else (t.Any,),
+        )
     return schema

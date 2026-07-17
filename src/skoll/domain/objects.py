@@ -3,20 +3,7 @@ import typing as t
 from datetime import timedelta
 from attrs import define, field
 
-from .primitives import (
-    ID,
-    Time,
-    Object,
-    DateTime,
-    Latitude,
-    Timezone,
-    Currency,
-    Longitude,
-    PositiveInt,
-    CountryCode,
-    LocalizedText,
-)
-
+from .primitives import *
 
 __all__ = [
     "Entity",
@@ -122,7 +109,7 @@ class WorkingHours(Object):
 @define(kw_only=True, slots=True, frozen=True, eq=False)
 class Entity(Object):
 
-    id: ID = field(factory=ID)
+    id: ID = field(factory=Ulid)
     created_at: DateTime = field(factory=DateTime.now)
     updated_at: DateTime = field(factory=DateTime.now)
     version: PositiveInt = field(factory=PositiveInt.zero)

@@ -6,7 +6,7 @@ from skoll.utils.functional import parse_db_cursor
 
 from .primitives import ID
 
-__all__ = ["Criteria", "ListPage", "SQLCriteria", "DecodedJwtToken", "KVBucket"]
+__all__ = ["Criteria", "ListPage", "SQLCriteria", "KVBucket"]
 
 
 class ListPage[T](t.NamedTuple):
@@ -19,15 +19,6 @@ class KVBucket(t.NamedTuple):
 
     key: str
     ttl: int | None = None
-
-
-class DecodedJwtToken(t.NamedTuple):
-
-    expired: bool = False
-    invalid: bool = False
-    sub: str | None = None
-    kind: str | None = None
-    extra: dict[str, t.Any] | None = None
 
 
 class SQLCriteria(t.NamedTuple):
