@@ -3,24 +3,6 @@ import typing as t
 
 from skoll.utils import sanitize_dict
 
-__all__ = [
-    "Error",
-    "NotFound",
-    "Conflict",
-    "Forbidden",
-    "BadRequest",
-    "InvalidToken",
-    "ExpiredToken",
-    "InvalidField",
-    "MissingField",
-    "InternalError",
-    "Unauthenticated",
-    "ValidationFailed",
-    "RateLimitExceeded",
-    "InvalidRequestPath",
-    "HttpMethodNotAllowed",
-]
-
 type ErrorStatusCode = t.Literal[400, 401, 403, 404, 405, 409, 429, 500, 502, 503, 504]
 
 
@@ -172,25 +154,25 @@ class MissingSubscriber(NotFound):
 
 
 @attrs.define(kw_only=True, slots=True)
-class InvalidToken(Error):
-
-    attr: str | None = attrs.field(default=None, init=False)
-    code: str = attrs.field(default="invalid_token", init=False)
-    status: ErrorStatusCode | None = attrs.field(default=401, init=False)
-    detail: str = attrs.field(default="The provide token is not a valid token", init=False)
-
-
-@attrs.define(kw_only=True, slots=True)
-class ExpiredToken(InvalidToken):
-
-    attr: str | None = attrs.field(default=None, init=False)
-    code: str = attrs.field(default="expired_token", init=False)
-    detail: str = attrs.field(default="The provide token has expired", init=False)
-
-
-@attrs.define(kw_only=True, slots=True)
 class RateLimitExceeded(Error):
 
     code: str = attrs.field(default="rate_limit_exceeded", init=False)
     status: ErrorStatusCode | None = attrs.field(default=429, init=False)
     detail: str = attrs.field(default="You are making too many requests. Please try again later", init=False)
+
+
+__all__ = [
+    "Error",
+    "NotFound",
+    "Conflict",
+    "Forbidden",
+    "BadRequest",
+    "InvalidField",
+    "MissingField",
+    "InternalError",
+    "Unauthenticated",
+    "ValidationFailed",
+    "RateLimitExceeded",
+    "InvalidRequestPath",
+    "HttpMethodNotAllowed",
+]

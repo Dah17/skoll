@@ -181,25 +181,40 @@ class NatsKVStore(KVStore):
     bucket: KeyValue
 
     @t.override
-    async def get(self, key: str) -> str | None:
+    async def list_keys(self, filters: list[str]) -> list[str]:
+        try:
+            return await self.bucket.keys(filters=filters)
+        except Exception:
+            return []
+
+    @t.override
+    async def get[T: Object](self, key: str, cls: type[T]) -> T | None:
         try:
             entry = await self.bucket.get(key)
-            return entry.value.decode("utf-8") if entry.value else None
+            str_value = entry.value.decode("utf-8") if entry.value else None
+            if str_value is None:
+                return None
+            res = cls.create(json.loads(str_value))
+            if is_fail(res):
+                return None
+            return res.value
         except Exception:
             return None
 
     @t.override
-    async def add(self, key: str, value: str, ttl: int | None = None) -> None:
+    async def add(self, key: str, value: Object, ttl: int | None = None) -> None:
         try:
-            await self.bucket.create(key=key, value=value.encode("utf-8"), msg_ttl=ttl)
+            str_value = json.dumps(value.serialize()).encode("utf-8")
+            await self.bucket.create(key=key, value=str_value, msg_ttl=ttl)
             return None
         except Exception as e:
             raise InternalError.from_exception(e, extra={"message": f"Failed to add key {key} in KV store"})
 
     @t.override
-    async def update(self, key: str, value: str, ttl: int | None = None) -> None:
+    async def update(self, key: str, value: Object, ttl: int | None = None) -> None:
         try:
-            await self.bucket.update(key=key, value=value.encode("utf-8"), msg_ttl=ttl)
+            str_value = json.dumps(value.serialize()).encode("utf-8")
+            await self.bucket.update(key=key, value=str_value, msg_ttl=ttl)
             return None
         except Exception as e:
             raise InternalError.from_exception(e, extra={"message": f"Failed to update key {key} in KV store"})
