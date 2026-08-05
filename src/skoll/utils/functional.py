@@ -165,11 +165,15 @@ def names_from_email(email: str) -> tuple[str, str]:
     return " ".join(names[:-1]), names[-1]
 
 
-def safe_call[T](func: t.Callable[..., T], *args: t.Any, **kwargs: t.Any) -> T | None:
+@t.overload
+def safe_call[T](func: t.Callable[..., T], *args: t.Any, default: T, **kwargs: t.Any) -> T: ...
+@t.overload
+def safe_call[T](func: t.Callable[..., T], *args: t.Any, default: None = None, **kwargs: t.Any) -> T | None: ...
+def safe_call[T](func: t.Callable[..., T], *args: t.Any, default: T | None = None, **kwargs: t.Any) -> T | None:
     try:
         return func(*args, **kwargs)
     except:
-        return None
+        return default
 
 
 @asynccontextmanager

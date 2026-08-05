@@ -142,13 +142,22 @@ def get_payload(subscriber: Subscriber, message: Message) -> Object | None:
 
 async def run_callback(subscriber: Subscriber, message: Message) -> Result[t.Any]:
     try:
-        cxt: dict[str, t.Any] = {
-            "msg": message,
-            "context": message.context,
-            "payload": message.payload,
-        }
-        return await call_with_dependencies(subscriber.callback, cxt)
+        context: dict[str, t.Any] = {"msg": message}
+        for param in get_signature(subscriber.callback):
+            if param.name == "payload" and issubclass(param.annotation, Object):
+                res = param.annotation.create(message.payload.value)
+                if is_fail(res):
+                    raise ValidationFailed(errors=res.err.errors)
+                context.update({"payload": res.value})
+            if param.name == "cxt" and issubclass(param.annotation, Object):
+                res = param.annotation.create(message.cxt.value)
+                if is_fail(res):
+                    errs = [e.serialize() for e in res.err.errors]
+                    raise InternalError(debug={"message": "Failed to create context object", "errors": errs})
+                context.update({"cxt": res.value})
+        return await call_with_dependencies(subscriber.callback, context)
     except Error as err:
+        print(f"Error while processing message on subject {message.subject}: {err}")
         return fail(err=err)
     except Exception as exc:
         return fail(err=InternalError.from_exception(exc, extra={"subject": message.subject, "message": message}))
@@ -217,9 +226,14 @@ class NatsKVStore(KVStore):
     async def update(self, key: str, value: Object, ttl: int | None = None) -> None:
         try:
             str_value = json.dumps(value.serialize()).encode("utf-8")
-            await self.bucket.update(key=key, value=str_value, msg_ttl=ttl)
+            if ttl is None:
+                await self.bucket.update(key=key, value=str_value)
+            else:
+                await self.delete(key=key)
+                await self.add(key=key, value=value, ttl=ttl)
             return None
         except Exception as e:
+            print(f"Failed to update key {key} in KV store: {e}")
             raise InternalError.from_exception(e, extra={"message": f"Failed to update key {key} in KV store"})
 
     @t.override

@@ -13,8 +13,6 @@ from .utils import from_json, create_db_cursor
 from .exceptions import InternalError, NotFound, Conflict
 from .domain import Entity, DB, Repository, Criteria, ListPage
 
-__all__ = ["PostgresDB", "PostgresRepo", "parse_pg_row"]
-
 
 def parse_pg_row(row: t.Any, errors_hints: dict[str, t.Any] | None = None) -> dict[str, t.Any]:
     raw = {}
@@ -170,3 +168,6 @@ class PostgresRepo[T: Entity](Repository[T]):
             params.append(dumps(kv[1]) if isinstance(kv[1], (dict, list)) else kv[1])
         sql_stm = f"UPDATE {self.table} SET {", ".join(changes)} WHERE id = $1 AND version = $2"
         return sql_stm, params
+
+
+__all__ = ["PostgresDB", "PostgresRepo", "parse_pg_row"]

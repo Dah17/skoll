@@ -10,15 +10,25 @@ from .primitives import Object, ID, DateTime, Map, Ulid
 type SubscriberAccess = t.Literal["PUBLIC", "PRIVATE"]
 type SubscriberCallback = t.Callable[..., c.Coroutine[t.Any, t.Any, Result[t.Any]]]
 
+EMPTY_MAP: Map = Map()
+
 
 @define(frozen=True, kw_only=True, slots=True, eq=False)
 class Message(Object):
 
     subject: str
     id: ID = field(factory=Ulid)
-    payload: Map = field(factory=Map)
     cxt: Map = field(factory=Map)
+    payload: Map = field(factory=Map)
     created_at: DateTime = field(factory=DateTime.now)
+
+    @classmethod
+    def new(
+        cls, subject: str, payload: dict[str, t.Any] | Map = EMPTY_MAP, cxt: dict[str, t.Any] | Map = EMPTY_MAP
+    ) -> t.Self:
+        payload = Map(value=payload) if isinstance(payload, dict) else payload
+        cxt = Map(value=cxt) if isinstance(cxt, dict) else cxt
+        return cls(subject=subject, payload=payload, cxt=cxt)
 
     @t.override
     def __eq__(self, other: t.Any) -> bool:
@@ -52,6 +62,9 @@ class Service:
 
     name: str
     subscribers: list[Subscriber] = field(factory=list)
+
+    def subjects(self, filters: list[SubscriberAccess]) -> list[str]:
+        return [sub.subject for sub in self.subscribers if sub.access in filters]
 
     def _add(
         self,
@@ -93,6 +106,9 @@ class Service:
 class Services:
 
     items: list[Service] = field(factory=list)
+
+    def subjects(self, filters: list[SubscriberAccess]) -> list[str]:
+        return [sub for s in self.items for sub in s.subjects(filters)]
 
     def extend(self, service: list[Service] | list[t.Self]):
         for item in service:
