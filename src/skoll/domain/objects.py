@@ -8,7 +8,6 @@ from .primitives import *
 __all__ = [
     "Entity",
     "Period",
-    "IPInfo",
     "Address",
     "TimeSlot",
     "Coordinate",
@@ -85,16 +84,6 @@ class SpecialHours(Object):
     date: DateTime
     name: LocalizedText
     slots: list[TimeSlot] = field(factory=list)
-
-
-@define(kw_only=True, slots=True, frozen=True)
-class IPInfo(Object):
-
-    timezone: Timezone
-    currency: Currency
-    city: str | None = None
-    country_code: CountryCode
-    region_code: str | None = None
 
 
 @define(kw_only=True, slots=True, frozen=True)

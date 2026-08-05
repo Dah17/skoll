@@ -2,6 +2,7 @@ import json
 import typing as t
 import collections.abc as c
 
+from ssl import SSLContext
 from nats.aio.msg import Msg
 from attrs import define, field
 from nats.js.kv import KeyValue
@@ -9,7 +10,6 @@ from nats.js import JetStreamContext
 from nats.aio.client import Client as NatsClient
 from nats.aio.subscription import Subscription as NSubscription
 
-from .config import SSL
 from .result import Result, fail, ok, is_ok, is_fail
 from .utils import call_with_dependencies, get_signature
 from .exceptions import Error, InternalError, ValidationFailed
@@ -23,6 +23,7 @@ class NatsMediator(Mediator):
 
     creds: str
     servers: list[str]
+    ssl_cxt: SSLContext
     default_req_timeout: int = 30
     _bucket: KeyValue | None = None
     _js: JetStreamContext | None = None
@@ -89,7 +90,9 @@ class NatsMediator(Mediator):
         try:
             if self.nc.is_connected or self.nc.is_reconnecting:
                 return None
-            await self.nc.connect(tls=SSL, servers=self.servers, max_reconnect_attempts=-1, user_credentials=self.creds)
+            await self.nc.connect(
+                tls=self.ssl_cxt, servers=self.servers, max_reconnect_attempts=-1, user_credentials=self.creds
+            )
             self._js = self.nc.jetstream()
             self._bucket = await self._js.create_key_value(bucket="skoll_kv_store", history=1)
             return None

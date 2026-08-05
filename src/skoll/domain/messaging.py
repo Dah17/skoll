@@ -7,14 +7,7 @@ from skoll.result import Result
 
 from .primitives import Object, ID, DateTime, Map, Ulid
 
-__all__ = [
-    "Service",
-    "Message",
-    "Services",
-    "Subscriber",
-    "SubscriberCallback",
-]
-
+type SubscriberAccess = t.Literal["PUBLIC", "PRIVATE"]
 type SubscriberCallback = t.Callable[..., c.Coroutine[t.Any, t.Any, Result[t.Any]]]
 
 
@@ -24,7 +17,7 @@ class Message(Object):
     subject: str
     id: ID = field(factory=Ulid)
     payload: Map = field(factory=Map)
-    context: Map = field(factory=Map)
+    cxt: Map = field(factory=Map)
     created_at: DateTime = field(factory=DateTime.now)
 
     @t.override
@@ -49,6 +42,7 @@ class Subscriber:
     queued: bool
     will_reply: bool
     service_name: str
+    access: SubscriberAccess
     js_stream: str | None = None
     callback: SubscriberCallback
 
@@ -60,29 +54,36 @@ class Service:
     subscribers: list[Subscriber] = field(factory=list)
 
     def _add(
-        self, subject: str, will_reply: bool, queued: bool, callback: SubscriberCallback, js_stream: str | None = None
+        self,
+        subject: str,
+        will_reply: bool,
+        queued: bool,
+        callback: SubscriberCallback,
+        access: SubscriberAccess,
+        js_stream: str | None = None,
     ):
         self.subscribers.append(
             Subscriber(
-                subject=subject,
                 queued=queued,
+                subject=subject,
                 callback=callback,
                 js_stream=js_stream,
                 will_reply=will_reply,
                 service_name=self.name,
+                access=access or "PRIVATE",
             )
         )
 
-    def on(self, subject: str, queued: bool = False, stream: str | None = None):
+    def on(self, subject: str, access: SubscriberAccess = "PRIVATE", queued: bool = False, stream: str | None = None):
         def decorator(callback: SubscriberCallback):
-            self._add(subject, will_reply=False, queued=queued, callback=callback, js_stream=stream)
+            self._add(subject, will_reply=False, queued=queued, callback=callback, access=access, js_stream=stream)
             return callback
 
         return decorator
 
-    def reply(self, subject: str):
+    def reply(self, subject: str, access: SubscriberAccess = "PRIVATE"):
         def decorator(callback: SubscriberCallback):
-            self._add(subject, will_reply=True, queued=True, callback=callback)
+            self._add(subject, will_reply=True, queued=True, callback=callback, access=access)
             return callback
 
         return decorator
@@ -105,3 +106,6 @@ class Services:
 
     def __radd__(self, other: t.Self | Service):
         return Services(items=(other.items if isinstance(other, Services) else [other]) + self.items)
+
+
+__all__ = ["Service", "Message", "Services", "Subscriber", "SubscriberAccess", "SubscriberCallback"]

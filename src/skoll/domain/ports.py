@@ -1,19 +1,11 @@
 import typing as t
 
 from skoll.result import Result
-from skoll.config import SMTPConfig
 
+from .objects import Entity
 from .primitives import ID, Object
-from .objects import Entity, IPInfo
 from .typing import Criteria, ListPage, KVBucket
 from .messaging import Message, Service, Services
-
-__all__ = ["DB", "Repository", "Mediator", "EmailSender", "IPInfoProvider", "KVStore"]
-
-
-class IPInfoProvider(t.Protocol):
-
-    async def __call__(self, ip: str) -> IPInfo | None: ...
 
 
 class DB[T = t.Any](t.Protocol):
@@ -55,6 +47,4 @@ class Mediator(t.Protocol):
     async def connect(self, kv_buckets: list[KVBucket] | None = None) -> None: ...
 
 
-class EmailSender(t.Protocol):
-
-    async def __call__(self, to: str, title: str, html_body: str, config: SMTPConfig = SMTPConfig.DEFAULT) -> None: ...
+__all__ = ["DB", "Repository", "Mediator", "KVStore"]
