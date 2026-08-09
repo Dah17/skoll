@@ -95,7 +95,7 @@ class PostgresRepo[T: Entity](Repository[T]):
                 raise ValueError("Entity Parsing failed")
             return res.value
         except Exception as exc:
-            raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql})
+            raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql}) from exc
 
     @t.override
     async def exist(self, criteria: Criteria) -> bool:
@@ -104,15 +104,16 @@ class PostgresRepo[T: Entity](Repository[T]):
             record = await self.conn.fetchrow(qry, *params)
             return record is not None
         except Exception as exc:
-            raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql})
+            raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql}) from exc
 
     @t.override
     async def delete(self, criteria: Criteria) -> None:
         try:
-            qry, params, _, _, _ = criteria.as_sql
-            await self.conn.execute(qry.replace("SELECT *", "DELETE"), *params)
+            _, _, count_query, count_params, _ = criteria.as_sql
+            delete_query = count_query.replace("SELECT COUNT(*)", "DELETE", 1)
+            await self.conn.execute(delete_query, *count_params)
         except Exception as exc:
-            raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql})
+            raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql}) from exc
 
     @t.override
     async def list(self, criteria: Criteria) -> ListPage[T]:
@@ -135,7 +136,7 @@ class PostgresRepo[T: Entity](Repository[T]):
                 return ListPage(cursor=cursor, items=items[:-1])
             return ListPage(items=items)
         except Exception as exc:
-            raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql})
+            raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql}) from exc
 
     @t.override
     async def save(self, state: T) -> None:
@@ -144,9 +145,9 @@ class PostgresRepo[T: Entity](Repository[T]):
             sql_stm, params = self.__prepare_insert(raw) if state.version.value == 0 else self.__prepare_update(raw)
             _ = await self.conn.execute(sql_stm, *params)
         except UniqueViolationError as exc:
-            raise Conflict(debug={"raw": state.serialize(), "table": self.table})
+            raise Conflict(debug={"raw": state.serialize(), "table": self.table}) from exc
         except Exception as exc:
-            raise InternalError.from_exception(exc, extra={"raw": state.serialize(), "table": self.table})
+            raise InternalError.from_exception(exc, extra={"raw": state.serialize(), "table": self.table}) from exc
 
     def __prepare_insert(self, raw: dict[str, t.Any]):
         keys: list[str] = []

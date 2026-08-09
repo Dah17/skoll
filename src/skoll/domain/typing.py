@@ -17,8 +17,9 @@ class ListPage[T](t.NamedTuple):
 
 class KVBucket(t.NamedTuple):
 
-    key: str
-    ttl: int | None = None
+    key: str  # bucket name
+    ttl: int | None = None  # bucket-level TTL in seconds, applied to every entry
+    history: int = 1  # number of historical revisions to keep per key
 
 
 class SQLCriteria(t.NamedTuple):

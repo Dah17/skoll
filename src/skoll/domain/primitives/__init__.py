@@ -57,7 +57,7 @@ class Ulid(ID):
         return fail(
             InvalidField(
                 field=to_snake_case(cls.__name__),
-                hints={"expected": "string", "contraints": {"pattern": ULID_REGEX}, "received": raw},
+                hints={"expected": "string", "constraints": {"pattern": ULID_REGEX}, "received": raw},
             )
         )
 
@@ -86,7 +86,7 @@ class PositiveInt(Object):
         return fail(
             InvalidField(
                 field=to_snake_case(cls.__name__),
-                hints={"expected": "integer", "contraints": {"min": 0}, "received": raw},
+                hints={"expected": "integer", "constraints": {"min": 0}, "received": raw},
             )
         )
 
@@ -194,7 +194,8 @@ class DateTime(Object):
     @classmethod
     def prepare(cls, raw: t.Any) -> Result[t.Any]:
         def from_iso(x: str) -> datetime | None:
-            return datetime.fromisoformat(x.replace("Z", "+00:00")).replace(tzinfo=UTC)
+            parsed = datetime.fromisoformat(x.replace("Z", "+00:00"))
+            return parsed.replace(tzinfo=UTC) if parsed.tzinfo is None else parsed.astimezone(UTC)
 
         if date := safe_call(from_iso, raw):
             return ok(date)
@@ -205,7 +206,7 @@ class DateTime(Object):
         return fail(
             InvalidField(
                 field=to_snake_case(cls.__name__),
-                hints={"expected": "integer", "contraints": {"min": 0}, "received": raw},
+                hints={"expected": "integer", "constraints": {"min": 0}, "received": raw},
             )
         )
 
@@ -223,7 +224,7 @@ class Latitude(Object):
         return fail(
             InvalidField(
                 field=to_snake_case(cls.__name__),
-                hints={"expected": "float", "contraints": {"min": -90, "max": 90}, "received": raw},
+                hints={"expected": "float", "constraints": {"min": -90, "max": 90}, "received": raw},
             )
         )
 
@@ -241,7 +242,7 @@ class Longitude(Object):
         return fail(
             InvalidField(
                 field=to_snake_case(cls.__name__),
-                hints={"expected": "float", "contraints": {"min": -180, "max": 180}, "received": raw},
+                hints={"expected": "float", "constraints": {"min": -180, "max": 180}, "received": raw},
             )
         )
 
@@ -272,7 +273,7 @@ class Time(Object):
         return fail(
             InvalidField(
                 field=to_snake_case(cls.__name__),
-                hints={"expected": "string", "contraints": {"pattern": TIME_REGEX}, "received": raw},
+                hints={"expected": "string", "constraints": {"pattern": TIME_REGEX}, "received": raw},
             )
         )
 
@@ -299,7 +300,7 @@ class Email(Object):
         return fail(
             InvalidField(
                 field=to_snake_case(cls.__name__),
-                hints={"expected": "string", "contraints": {"pattern": EMAIL_REGEX}, "received": raw},
+                hints={"expected": "string", "constraints": {"pattern": EMAIL_REGEX}, "received": raw},
             )
         )
 
@@ -344,7 +345,7 @@ class LocalizedText(Object):
                 field=to_snake_case(cls.__name__),
                 hints={
                     "received": raw,
-                    "expected": "Dictionaire<BCP47Locale, string>",
+                    "expected": "Dictionary<BCP47Locale, string>",
                     "example": {"en-US": "English", "en": "An example"},
                 },
             )

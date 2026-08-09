@@ -1,6 +1,8 @@
 # Skoll
 
-A simple package that provide a basic API python framework based on starlette and some domain driven design concepts.
+A small Python toolkit for building domain-driven, message-based backends. It provides a `Result` type,
+validated value objects, a repository/ports-and-adapters layer (PostgreSQL via asyncpg), a NATS-based
+mediator with a JetStream KV store, and a lightweight async dependency-injection resolver.
 
 ## Installation
 

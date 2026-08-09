@@ -2,6 +2,7 @@ import typing as t
 
 from datetime import timedelta
 from attrs import define, field
+from abc import abstractmethod, ABC
 
 from .primitives import *
 
@@ -96,12 +97,16 @@ class WorkingHours(Object):
 
 
 @define(kw_only=True, slots=True, frozen=True, eq=False)
-class Entity(Object):
+class Entity[T: ID = Ulid](Object, ABC):
 
-    id: ID = field(factory=Ulid)
     created_at: DateTime = field(factory=DateTime.now)
     updated_at: DateTime = field(factory=DateTime.now)
     version: PositiveInt = field(factory=PositiveInt.zero)
+
+    @property
+    @abstractmethod
+    def id(self) -> T:
+        raise NotImplementedError("Subclasses must implement the `id` property to return the correct ID type.")
 
     @t.override
     def __eq__(self, other: t.Any) -> bool:
@@ -118,9 +123,9 @@ class Entity(Object):
         return hash(self.id.serialize())
 
     @t.override
-    def evolve(self, allow_none: bool = False, **kwargs: t.Any) -> t.Self:
+    def evolve(self, *, allow_none: bool = False, now: DateTime | None = None, **kwargs: t.Any) -> t.Self:
         if "updated_at" not in kwargs:
-            kwargs["updated_at"] = DateTime.now()
+            kwargs["updated_at"] = now or DateTime.now()
         if "version" not in kwargs:
             kwargs["version"] = self.version.increment()
         return super().evolve(allow_none=allow_none, **kwargs)

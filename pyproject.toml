@@ -1,7 +1,7 @@
 [project]
 name = "skoll"
 dynamic = ["version"]
-description = "A simple package that provide a basic API python framework based on starlette and some domain driven design concepts"
+description = "A small Python toolkit for domain-driven, message-based backends (Result type, value objects, asyncpg repositories, NATS mediator, async DI)"
 readme = "README.md"
 authors = [
     { name = "Monzon Diarra", email = "diarramonzon4@gmail.com" }

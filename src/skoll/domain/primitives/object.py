@@ -55,6 +55,7 @@ class Object(ABC):
     @classmethod
     def _init(cls, value: t.Any) -> Result[t.Self]:
         if isinstance(value, dict):
+            value = {k: v for k, v in value.items() if v is not attrs.NOTHING}
             return ok(cls(**value))
         return ok(cls(**{"value": value}))
 
@@ -77,7 +78,7 @@ class Object(ABC):
         res = combine(results)
         return cls._init(value=res.value) if is_ok(res) else res
 
-    def evolve(self, allow_none: bool = False, **kwargs: t.Any) -> t.Self:
+    def evolve(self, *, allow_none: bool = False, **kwargs: t.Any) -> t.Self:
         allowed_keys = {f.name for f in attrs.fields(self.__class__)}
         keys_to_remove = [key for key in kwargs if key not in allowed_keys or (kwargs[key] is None and not allow_none)]
         for k in keys_to_remove:
@@ -103,7 +104,7 @@ class _SchemaItem:
                 return ok(value=self.default)
             if self.default.takes_self is False:
                 return ok(value=self.default.factory())
-            # Ignore case where takes_self is True, as we don't have the object instance here
+            return ok(value=attrs.NOTHING)
 
         if self.optional is True and raw_item is None:
             return ok(value=None)

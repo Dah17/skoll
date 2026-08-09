@@ -87,9 +87,9 @@ class Service:
             )
         )
 
-    def on(self, subject: str, access: SubscriberAccess = "PRIVATE", queued: bool = False, stream: str | None = None):
+    def on(self, subject: str, queued: bool = False, stream: str | None = None):
         def decorator(callback: SubscriberCallback):
-            self._add(subject, will_reply=False, queued=queued, callback=callback, access=access, js_stream=stream)
+            self._add(subject, will_reply=False, queued=queued, callback=callback, access="PRIVATE", js_stream=stream)
             return callback
 
         return decorator

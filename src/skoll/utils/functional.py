@@ -53,7 +53,7 @@ def decrypt_value(value: str) -> str:
 def from_json(val: t.Any) -> t.Any:
     try:
         return loads(val)
-    except:
+    except Exception:
         return None
 
 
@@ -152,7 +152,7 @@ def find_item[T](match_with: t.Callable[[T], bool], items: list[T]) -> T | None:
 def to_tz(tz_str: str) -> ZoneInfo:
     try:
         return ZoneInfo(key=tz_str)
-    except:
+    except Exception:
         return ZoneInfo("UTC")
 
 
@@ -172,7 +172,22 @@ def safe_call[T](func: t.Callable[..., T], *args: t.Any, default: None = None, *
 def safe_call[T](func: t.Callable[..., T], *args: t.Any, default: T | None = None, **kwargs: t.Any) -> T | None:
     try:
         return func(*args, **kwargs)
-    except:
+    except Exception:
+        return default
+
+
+@t.overload
+async def safe_async_call[T](func: t.Callable[..., c.Awaitable[T]], *args: t.Any, default: T, **kwargs: t.Any) -> T: ...
+@t.overload
+async def safe_async_call[T](
+    func: t.Callable[..., c.Awaitable[T]], *args: t.Any, default: None = None, **kwargs: t.Any
+) -> T | None: ...
+async def safe_async_call[T](
+    func: t.Callable[..., c.Awaitable[T]], *args: t.Any, default: T | None = None, **kwargs: t.Any
+) -> T | None:
+    try:
+        return await func(*args, **kwargs)
+    except Exception:
         return default
 
 
@@ -235,7 +250,7 @@ def parse_db_cursor(cursor: str) -> DbCursor:
         decoded = decode_value(cursor)
         data = loads(decoded)
         return DbCursor(**data)
-    except:
+    except Exception:
         return DbCursor()
 
 
@@ -269,6 +284,7 @@ __all__ = [
     "string_to_snake",
     "string_to_camel",
     "parse_db_cursor",
+    "safe_async_call",
     "names_from_email",
     "iso_to_timestamp",
     "timestamp_to_iso",

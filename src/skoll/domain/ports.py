@@ -3,9 +3,27 @@ import typing as t
 from skoll.result import Result
 
 from .objects import Entity
-from .primitives import ID, Object
+from .primitives import ID, Object, DateTime
 from .typing import Criteria, ListPage, KVBucket
 from .messaging import Message, Service, Services
+
+
+@t.runtime_checkable
+class Clock(t.Protocol):
+
+    def now(self) -> DateTime: ...
+
+
+@t.runtime_checkable
+class IdGenerator[T: ID](t.Protocol):
+
+    def generate(self) -> T: ...
+
+
+@t.runtime_checkable
+class CodeGenerator(t.Protocol):
+
+    def generate(self) -> str: ...
 
 
 class DB[T = t.Any](t.Protocol):
@@ -28,16 +46,16 @@ class Repository[T: Entity](t.Protocol):
 class KVStore(t.Protocol):
 
     async def delete(self, key: str) -> None: ...
-    async def list_keys(self, filters: list[str]) -> list[str]: ...
     async def get[T: Object](self, key: str, cls: type[T]) -> T | None: ...
-    async def add(self, key: str, value: Object, ttl: int | None = None) -> None: ...
-    async def update(self, key: str, value: Object, ttl: int | None = None) -> None: ...
+    async def list[T: Object](self, filters: list[str], cls: type[T]) -> list[T]: ...
+    async def put(self, key: str, value: Object, ttl: int | None = None) -> None: ...
 
 
 class Mediator(t.Protocol):
 
     @property
     def kv(self) -> KVStore: ...
+    def store(self, bucket: str) -> KVStore: ...
     async def disconnect(self) -> None: ...
     async def unsubscribe(self, id: ID) -> None: ...
 
@@ -47,4 +65,4 @@ class Mediator(t.Protocol):
     async def connect(self, kv_buckets: list[KVBucket] | None = None) -> None: ...
 
 
-__all__ = ["DB", "Repository", "Mediator", "KVStore"]
+__all__ = ["DB", "Repository", "Mediator", "KVStore", "Clock", "IdGenerator", "CodeGenerator"]
