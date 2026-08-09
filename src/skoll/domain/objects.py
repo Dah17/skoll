@@ -103,16 +103,15 @@ class Entity[T: ID = Ulid](Object, ABC):
     updated_at: DateTime = field(factory=DateTime.now)
     version: PositiveInt = field(factory=PositiveInt.zero)
 
-    @property
     @abstractmethod
-    def id(self) -> T:
+    def get_id(self) -> T:
         raise NotImplementedError("Subclasses must implement the `id` property to return the correct ID type.")
 
     @t.override
     def __eq__(self, other: t.Any) -> bool:
         if not isinstance(other, self.__class__):
             return False
-        return other.__hash__() == self.__hash__()
+        return other.get_id() == self.get_id()
 
     @t.override
     def __ne__(self, other: t.Any) -> bool:
@@ -120,7 +119,7 @@ class Entity[T: ID = Ulid](Object, ABC):
 
     @t.override
     def __hash__(self) -> int:
-        return hash(self.id.serialize())
+        return hash(self.get_id().value)
 
     @t.override
     def evolve(self, *, allow_none: bool = False, now: DateTime | None = None, **kwargs: t.Any) -> t.Self:
