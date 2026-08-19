@@ -13,7 +13,7 @@ from nats.aio.subscription import Subscription as NSubscription
 
 from .result import Result, fail, ok, is_ok, is_fail
 from .exceptions import Error, InternalError, ValidationFailed
-from .utils import call_with_dependencies, get_signature, safe_async_call
+from .utils import call_with_dependencies, get_signature, safe_async_call, serialize
 from .domain import Message, Ulid, ID, Subscriber, Service, Services, Mediator, KVStore, KVBucket, Object
 
 __all__ = ["NatsMediator"]
@@ -145,11 +145,12 @@ async def run_callback(subscriber: Subscriber, message: Message) -> Result[t.Any
     try:
         context: dict[str, t.Any] = {"msg": message}
         for param in get_signature(subscriber.callback):
-            if param.name == "payload" and issubclass(param.annotation, Object):
+            payload_key = subscriber.payload_key or "payload"
+            if param.name == payload_key and issubclass(param.annotation, Object):
                 res = param.annotation.create(message.payload.value)
                 if is_fail(res):
                     raise ValidationFailed(errors=res.err.errors)
-                context.update({"payload": res.value})
+                context.update({payload_key: res.value})
             if param.name == "cxt" and issubclass(param.annotation, Object):
                 res = param.annotation.create(message.cxt.value)
                 if is_fail(res):
@@ -172,11 +173,12 @@ def wrap_callback(subscriber: Subscriber) -> t.Callable[[Msg], c.Awaitable[None]
                 raise ValidationFailed(errors=data_res.err.errors)
             result = await run_callback(subscriber, data_res.value)
             if subscriber.will_reply:
-                raw_response = {
-                    "data": result.value if is_ok(result) else None,
-                    "error": result.err.serialize() if not is_ok(result) else None,
-                }
-                await msg.respond(json.dumps(raw_response).encode("utf-8"))
+                raw_res: dict[str, t.Any] = {"data": None, "error": None}
+                if is_ok(result):
+                    raw_res["data"] = serialize(result.value)
+                else:
+                    raw_res["error"] = result.err.serialize()
+                await msg.respond(json.dumps(raw_res).encode("utf-8"))
             elif subscriber.js_stream is not None:
                 if is_ok(result):
                     await msg.ack()

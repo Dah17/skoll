@@ -3,6 +3,7 @@ import typing as t
 from datetime import timedelta
 from attrs import define, field
 from abc import abstractmethod, ABC
+from skoll.utils import create_db_cursor
 
 from .primitives import *
 
@@ -12,6 +13,7 @@ __all__ = [
     "Address",
     "TimeSlot",
     "Coordinate",
+    "CursorPage",
     "RegularHours",
     "SpecialHours",
     "WorkingHours",
@@ -128,3 +130,32 @@ class Entity[T: ID = Ulid](Object, ABC):
         if "version" not in kwargs:
             kwargs["version"] = self.version.increment()
         return super().evolve(allow_none=allow_none, **kwargs)
+
+
+@define(kw_only=True, slots=True, frozen=True)
+class CursorPage[T](Object):
+
+    limit: int
+    has_next: bool
+    total_count: int
+    next_cursor: str | None = None
+    items: list[T] = field(factory=list)
+
+    @classmethod
+    def new[U](
+        cls, *, items: list[U], total_count: int, limit: int, get_item_key: t.Callable[[U], str]
+    ) -> "CursorPage[U]":
+        has_next = len(items) == limit + 1
+        page_items = items[:limit] if has_next else items
+
+        next_cursor = (
+            create_db_cursor(get_item_key(page_items[-1]), total_count, limit) if has_next and page_items else None
+        )
+
+        return CursorPage(
+            limit=limit,
+            items=page_items,
+            has_next=has_next,
+            total_count=total_count,
+            next_cursor=next_cursor,
+        )

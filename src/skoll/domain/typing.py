@@ -6,13 +6,7 @@ from skoll.utils.functional import parse_db_cursor
 
 from .primitives import ID
 
-__all__ = ["Criteria", "ListPage", "SQLCriteria", "KVBucket"]
-
-
-class ListPage[T](t.NamedTuple):
-
-    items: list[T]
-    cursor: str | None = None
+__all__ = ["Criteria", "SQLCriteria", "KVBucket"]
 
 
 class KVBucket(t.NamedTuple):
@@ -32,6 +26,7 @@ class SQLCriteria(t.NamedTuple):
     @classmethod
     def new(cls, crt: "Criteria", attrs: list[tuple[str, t.Any]], table: str, prefix: str = "SELECT *") -> t.Self:
         cursor = parse_db_cursor(crt.cursor) if crt.cursor else None
+        limit = cursor.limit if cursor and cursor.id else crt.limit
         if crt.id is not None:
             attrs.append((f"id = ${len(attrs) + 1}", crt.id.value))
         if crt.id is None and cursor is not None and cursor.id is not None:
@@ -40,7 +35,7 @@ class SQLCriteria(t.NamedTuple):
         where_clause = " AND ".join(attr[0] for attr in attrs) if len(attrs) > 0 else "1=1"
         query = f"{prefix} FROM {table} WHERE {where_clause} ORDER BY id ASC LIMIT ${len(attrs) + 1}"
         count_params = [value for _, value in attrs]
-        params = count_params + [crt.limit + 1]
+        params = count_params + [limit + 1]
         count_query = f"SELECT COUNT(*) FROM {table} WHERE {where_clause}"
         return cls(query, params, count_query, count_params=count_params, items_count=cursor.count if cursor else None)
 

@@ -8,10 +8,10 @@ from asyncpg.connection import Connection
 from contextlib import asynccontextmanager
 from asyncpg import Record, create_pool, UniqueViolationError
 
+from .utils import from_json
 from .result import Result, is_fail
-from .utils import from_json, create_db_cursor
+from .domain import Entity, DB, Repository, Criteria
 from .exceptions import InternalError, NotFound, Conflict
-from .domain import Entity, DB, Repository, Criteria, ListPage
 
 
 def parse_pg_row(row: t.Any, errors_hints: dict[str, t.Any] | None = None) -> dict[str, t.Any]:
@@ -116,7 +116,7 @@ class PostgresRepo[T: Entity](Repository[T]):
             raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql}) from exc
 
     @t.override
-    async def list(self, criteria: Criteria) -> ListPage[T]:
+    async def list(self, criteria: Criteria) -> tuple[list[T], int]:
         try:
             qry, params, count_query, count_params, items_count = criteria.as_sql
             count: int = (
@@ -131,10 +131,11 @@ class PostgresRepo[T: Entity](Repository[T]):
                 if is_fail(res):
                     raise ValueError("Entity Parsing failed")
                 items.append(res.value)
-            if len(items) == criteria.limit + 1:
-                cursor = create_db_cursor(items[-1].id.value, count, criteria.limit)
-                return ListPage(cursor=cursor, items=items[:-1])
-            return ListPage(items=items)
+            return items, count
+            # if len(items) == criteria.limit + 1:
+            # #     cursor = create_db_cursor(items[-1].get_id().value, count, criteria.limit)
+            # #     return ListPage(cursor=cursor, items=items[:-1])
+            # return ListPage(items=items)
         except Exception as exc:
             raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql}) from exc
 

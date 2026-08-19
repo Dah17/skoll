@@ -55,6 +55,7 @@ class Subscriber:
     access: SubscriberAccess
     js_stream: str | None = None
     callback: SubscriberCallback
+    payload_key: str | None = None
 
 
 @define(kw_only=True, slots=True, frozen=True)
@@ -74,6 +75,7 @@ class Service:
         callback: SubscriberCallback,
         access: SubscriberAccess,
         js_stream: str | None = None,
+        payload_key: str | None = None,
     ):
         self.subscribers.append(
             Subscriber(
@@ -83,20 +85,29 @@ class Service:
                 js_stream=js_stream,
                 will_reply=will_reply,
                 service_name=self.name,
+                payload_key=payload_key,
                 access=access or "PRIVATE",
             )
         )
 
-    def on(self, subject: str, queued: bool = False, stream: str | None = None):
+    def on(self, subject: str, payload_key: str | None = None, queued: bool = False, stream: str | None = None):
         def decorator(callback: SubscriberCallback):
-            self._add(subject, will_reply=False, queued=queued, callback=callback, access="PRIVATE", js_stream=stream)
+            self._add(
+                subject,
+                will_reply=False,
+                queued=queued,
+                callback=callback,
+                access="PRIVATE",
+                js_stream=stream,
+                payload_key=payload_key,
+            )
             return callback
 
         return decorator
 
-    def reply(self, subject: str, access: SubscriberAccess = "PRIVATE"):
+    def reply(self, subject: str, payload_key: str | None = None, access: SubscriberAccess = "PRIVATE"):
         def decorator(callback: SubscriberCallback):
-            self._add(subject, will_reply=True, queued=True, callback=callback, access=access)
+            self._add(subject, will_reply=True, queued=True, callback=callback, access=access, payload_key=payload_key)
             return callback
 
         return decorator

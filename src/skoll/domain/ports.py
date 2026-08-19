@@ -3,8 +3,8 @@ import typing as t
 from skoll.result import Result
 
 from .objects import Entity
+from .typing import Criteria, KVBucket
 from .primitives import ID, Object, DateTime
-from .typing import Criteria, ListPage, KVBucket
 from .messaging import Message, Service, Services
 
 
@@ -40,7 +40,7 @@ class Repository[T: Entity](t.Protocol):
     async def delete(self, criteria: Criteria) -> None: ...
     async def exist(self, criteria: Criteria) -> bool: ...
     async def get(self, criteria: Criteria) -> T | None: ...
-    async def list(self, criteria: Criteria) -> ListPage[T]: ...
+    async def list(self, criteria: Criteria) -> tuple[list[T], int]: ...
 
 
 class KVStore(t.Protocol):
