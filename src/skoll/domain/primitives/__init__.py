@@ -338,7 +338,7 @@ class LocalizedText(Object):
             keys_valid = all(isinstance(k, str) and re.fullmatch(LOCALE_PATTERN, k) for k in value.keys())
             values_valid = all(isinstance(v, str) for v in value.values())
             if keys_valid and values_valid:
-                return ok(t.cast(dict[str, str], value))
+                return ok({"value": t.cast(dict[str, str], value)})
 
         return fail(
             InvalidField(
