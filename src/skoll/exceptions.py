@@ -3,7 +3,7 @@ import typing as t
 
 from skoll.utils import sanitize_dict
 
-type ErrorStatusCode = t.Literal[400, 401, 403, 404, 405, 409, 429, 500, 502, 503, 504]
+type ErrorStatusCode = t.Literal[400, 401, 402, 403, 404, 405, 409, 422, 429, 500, 502, 503, 504]
 
 
 @attrs.define(kw_only=True, slots=True)

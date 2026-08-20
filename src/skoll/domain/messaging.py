@@ -7,7 +7,7 @@ from skoll.result import Result
 
 from .primitives import Object, ID, DateTime, Map, Ulid
 
-type SubscriberAccess = t.Literal["PUBLIC", "PRIVATE"]
+type SubscriberAccess = t.Literal["PUBLIC", "PRIVATE", "INTERNAL"]
 type SubscriberCallback = t.Callable[..., c.Coroutine[t.Any, t.Any, Result[t.Any]]]
 
 EMPTY_MAP: Map = Map()
