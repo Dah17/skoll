@@ -8,17 +8,22 @@ from nats.aio.msg import Msg
 from attrs import define, field
 from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
+from nats.js.api import ConsumerConfig
+from nats.js.errors import NotFoundError
 from nats.aio.client import Client as NatsClient
 from nats.aio.subscription import Subscription as NSubscription
 
 from .result import Result, fail, ok, is_ok, is_fail
-from .exceptions import Error, InternalError, ValidationFailed
+from .exceptions import Error, InternalError, InvalidField, ValidationFailed
 from .utils import call_with_dependencies, get_signature, safe_async_call, serialize
 from .domain import Message, Ulid, ID, Subscriber, Service, Services, Mediator, KVStore, KVBucket, Object
 
 __all__ = ["NatsMediator"]
 
 logger = logging.getLogger("skoll.nats")
+
+NAK_DELAY = 5
+TERMINAL_STATUSES = frozenset({400, 422})
 
 
 @define(kw_only=True, slots=True)
@@ -65,12 +70,14 @@ class NatsMediator(Mediator):
         subscriptions: list[NSubscription] = []
         for subscriber in get_subscribers(services):
             if subscriber.js_stream is not None:
+                await self.sync_consumer(subscriber)
                 sub = await self.js.subscribe(
                     manual_ack=True,
                     subject=subscriber.subject,
                     stream=subscriber.js_stream,
                     cb=wrap_callback(subscriber),
                     durable=subscriber.service_name,
+                    config=consumer_config(subscriber),
                     queue=subscriber.service_name if subscriber.queued else None,
                 )
             else:
@@ -82,6 +89,33 @@ class NatsMediator(Mediator):
             subscriptions.append(sub)
         self.subscriptions[sub_id.value] = subscriptions
         return sub_id
+
+    async def sync_consumer(self, subscriber: Subscriber) -> None:
+        """
+        Align an already existing durable consumer with the subscriber configuration.
+
+        `js.subscribe` only applies the consumer config when it has to create the consumer, so without
+        this an existing durable would silently keep the settings it was first created with.
+        """
+        if subscriber.max_deliver is None or subscriber.js_stream is None:
+            return None
+        try:
+            info = await self.js.consumer_info(subscriber.js_stream, subscriber.service_name)
+        except NotFoundError:
+            return None
+        if info.config.max_deliver == subscriber.max_deliver:
+            return None
+        try:
+            config = info.config.evolve(max_deliver=subscriber.max_deliver)
+            await self.js.add_consumer(subscriber.js_stream, config=config)
+        except Exception as e:
+            logger.warning(
+                "Failed to update max_deliver of consumer %s on stream %s: %s",
+                subscriber.service_name,
+                subscriber.js_stream,
+                e,
+            )
+        return None
 
     @t.override
     async def unsubscribe(self, id: ID) -> None:
@@ -165,13 +199,38 @@ async def run_callback(subscriber: Subscriber, message: Message) -> Result[t.Any
         return fail(err=InternalError.from_exception(exc, extra={"subject": message.subject, "message": message}))
 
 
+def parse_message(msg: Msg) -> Result[Message]:
+    try:
+        res = Message.create(raw=json.loads(msg.data.decode("utf-8")))
+        if is_fail(res):
+            return fail(ValidationFailed(errors=res.err.errors or [res.err]))
+        return ok(res.value)
+    except Exception as e:
+        return fail(ValidationFailed(errors=[InvalidField(field="data", hints={"error": str(e)})]))
+
+
+def is_terminal(err: Error) -> bool:
+    """
+    Whether an error makes a message poisonous, meaning no redelivery will ever succeed.
+    """
+    return isinstance(err, ValidationFailed) or err.status in TERMINAL_STATUSES
+
+
+async def settle(msg: Msg, result: Result[t.Any]) -> None:
+    if is_ok(result):
+        await msg.ack()
+    elif is_terminal(result.err):
+        logger.error("Terminating message on subject %s: %s", msg.subject, result.err.serialize())
+        await msg.term()
+    else:
+        await msg.nak(delay=NAK_DELAY)
+
+
 def wrap_callback(subscriber: Subscriber) -> t.Callable[[Msg], c.Awaitable[None]]:
     async def callback(msg: Msg):
         try:
-            data_res = Message.create(raw=json.loads(msg.data.decode("utf-8")))
-            if is_fail(data_res):
-                raise ValidationFailed(errors=data_res.err.errors)
-            result = await run_callback(subscriber, data_res.value)
+            data_res = parse_message(msg)
+            result = data_res if is_fail(data_res) else await run_callback(subscriber, data_res.value)
             if subscriber.will_reply:
                 raw_res: dict[str, t.Any] = {"data": None, "error": None}
                 if is_ok(result):
@@ -180,14 +239,19 @@ def wrap_callback(subscriber: Subscriber) -> t.Callable[[Msg], c.Awaitable[None]
                     raw_res["error"] = result.err.serialize()
                 await msg.respond(json.dumps(raw_res).encode("utf-8"))
             elif subscriber.js_stream is not None:
-                if is_ok(result):
-                    await msg.ack()
-                else:
-                    await msg.nak(delay=5)
+                await settle(msg, result)
+            elif is_fail(result):
+                logger.error("Failed to process message on subject %s: %s", msg.subject, result.err.serialize())
         except Exception as e:
-            logger.exception("Unhandled error in NATS message callback", e)
+            logger.exception("Unhandled error in NATS message callback: %s", e)
 
     return callback
+
+
+def consumer_config(subscriber: Subscriber) -> ConsumerConfig | None:
+    if subscriber.max_deliver is None:
+        return None
+    return ConsumerConfig(max_deliver=subscriber.max_deliver)
 
 
 @define(kw_only=True, slots=True)
@@ -211,7 +275,7 @@ class NatsKVStore(KVStore):
 
     @t.override
     async def list[T: Object](self, filters: list[str], cls: type[T]) -> list[T]:
-        keys = await safe_async_call(self.bucket.keys, filters=filters, default=[])
+        keys = await safe_async_call(lambda: self.bucket.keys(filters=filters), default=[])
         items: list[T] = []
         for key in keys:
             item = await self.get(key, cls)

@@ -56,6 +56,7 @@ class Subscriber:
     js_stream: str | None = None
     callback: SubscriberCallback
     payload_key: str | None = None
+    max_deliver: int | None = None
 
 
 @define(kw_only=True, slots=True, frozen=True)
@@ -76,6 +77,7 @@ class Service:
         access: SubscriberAccess,
         js_stream: str | None = None,
         payload_key: str | None = None,
+        max_deliver: int | None = None,
     ):
         self.subscribers.append(
             Subscriber(
@@ -86,26 +88,36 @@ class Service:
                 will_reply=will_reply,
                 service_name=self.name,
                 payload_key=payload_key,
-                access=access or "PRIVATE",
+                max_deliver=max_deliver,
+                access=access or "INTERNAL",
             )
         )
 
-    def on(self, subject: str, payload_key: str | None = None, queued: bool = False, stream: str | None = None):
+    def on(
+        self,
+        subject: str,
+        queued: bool = False,
+        stream: str | None = None,
+        payload_key: str | None = None,
+        max_deliver: int | None = None,
+        access: SubscriberAccess = "INTERNAL",
+    ):
         def decorator(callback: SubscriberCallback):
             self._add(
                 subject,
-                will_reply=False,
                 queued=queued,
-                callback=callback,
-                access="PRIVATE",
+                access=access,
                 js_stream=stream,
+                will_reply=False,
+                callback=callback,
                 payload_key=payload_key,
+                max_deliver=max_deliver,
             )
             return callback
 
         return decorator
 
-    def reply(self, subject: str, payload_key: str | None = None, access: SubscriberAccess = "PRIVATE"):
+    def reply(self, subject: str, payload_key: str | None = None, access: SubscriberAccess = "INTERNAL"):
         def decorator(callback: SubscriberCallback):
             self._add(subject, will_reply=True, queued=True, callback=callback, access=access, payload_key=payload_key)
             return callback
