@@ -29,6 +29,14 @@ class DbCursor:
 new_ulid: t.Callable[[], str] = lambda: ulid().lower()
 
 
+def get_secret_encryption_key() -> str:
+    key = get_config_var(["SECRET_ENCRYPTION_KEY"], default="")()
+    if key.startswith("/"):
+        with open(key, "r") as f:
+            key = f.read()
+    return key
+
+
 def encode_value(value: str) -> str:
     return b64encode(value.encode("utf-8")).decode("utf-8")
 
@@ -41,12 +49,12 @@ def decode_value(value: str) -> str:
 
 
 def encrypt_value(value: str) -> str:
-    cipher = Fernet(os.getenv("SECRET_ENCRYPTION_KEY") or "")
+    cipher = Fernet(get_secret_encryption_key())
     return cipher.encrypt(value.encode("utf-8")).decode("utf-8")
 
 
 def decrypt_value(value: str) -> str:
-    cipher = Fernet(os.getenv("SECRET_ENCRYPTION_KEY") or "")
+    cipher = Fernet(get_secret_encryption_key())
     return cipher.decrypt(value.encode("utf-8")).decode("utf-8")
 
 
