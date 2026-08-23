@@ -148,9 +148,7 @@ class CursorPage[T](Object):
         has_next = len(items) == limit + 1
         page_items = items[:limit] if has_next else items
 
-        next_cursor = (
-            create_db_cursor(get_item_key(page_items[-1]), total_count, limit) if has_next and page_items else None
-        )
+        next_cursor = create_db_cursor(get_item_key(items[-1]), total_count, limit) if has_next and page_items else None
 
         return CursorPage(
             limit=limit,
