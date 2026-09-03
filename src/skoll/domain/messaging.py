@@ -19,7 +19,8 @@ EMPTY_MAP: Map = Map()
 REMOVED_ACCESS_HINT = (
     "access= was removed: a subject now carries its own scope, as"
     " <cmd|qry|evt>.<internal|public>.<version>.<domain>.<aggregate>.<action>."
-    " Rename the subject and, while both names must live, pass aliases=(<old subject>,)."
+    " Moving a subject between scopes is a rename, not a dual-subscribe: drain it, cut over, then"
+    " delete whatever consumer is left on the old name."
 )
 
 
@@ -89,12 +90,10 @@ class Subscriber:
     payload_key: str | None = None
     max_deliver: int | None = None
     anonymous: bool = False
-    aliases: tuple[str, ...] = ()
-    is_alias: bool = False
 
     @property
     def durable(self) -> str:
-        if not self.is_alias:
+        if self.js_stream is None:
             return self.service_name
         return f"{self.service_name}_{re.sub(r'[^A-Za-z0-9_-]', '_', self.subject)}"
 
@@ -105,27 +104,6 @@ class Subscriber:
     @property
     def is_public(self) -> bool:
         return self.scope == "PUBLIC"
-
-    def every_subject(self) -> tuple[str, ...]:
-        return (self.subject, *self.aliases)
-
-    def on_subject(self, subject: str) -> "Subscriber":
-        return self if subject == self.subject else evolve_subject(self, subject)
-
-
-def evolve_subject(subscriber: Subscriber, subject: str) -> Subscriber:
-    return Subscriber(
-        subject=subject,
-        queued=subscriber.queued,
-        will_reply=subscriber.will_reply,
-        service_name=subscriber.service_name,
-        js_stream=subscriber.js_stream,
-        callback=subscriber.callback,
-        payload_key=subscriber.payload_key,
-        max_deliver=subscriber.max_deliver,
-        anonymous=subscriber.anonymous,
-        is_alias=True,
-    )
 
 
 @define(kw_only=True, slots=True, frozen=True)
@@ -152,7 +130,6 @@ class Service:
         payload_key: str | None = None,
         max_deliver: int | None = None,
         anonymous: bool = False,
-        aliases: tuple[str, ...] = (),
     ):
         self.subscribers.append(
             Subscriber(
@@ -165,7 +142,6 @@ class Service:
                 payload_key=payload_key,
                 max_deliver=max_deliver,
                 anonymous=anonymous,
-                aliases=tuple(aliases),
             )
         )
 
@@ -177,7 +153,6 @@ class Service:
         payload_key: str | None = None,
         max_deliver: int | None = None,
         anonymous: bool = False,
-        aliases: tuple[str, ...] = (),
         access: t.Any = None,
     ):
         reject_access(access)
@@ -192,7 +167,6 @@ class Service:
                 payload_key=payload_key,
                 max_deliver=max_deliver,
                 anonymous=anonymous,
-                aliases=aliases,
             )
             return callback
 
@@ -203,7 +177,6 @@ class Service:
         subject: str,
         payload_key: str | None = None,
         anonymous: bool = False,
-        aliases: tuple[str, ...] = (),
         access: t.Any = None,
     ):
         reject_access(access)
@@ -216,7 +189,6 @@ class Service:
                 callback=callback,
                 payload_key=payload_key,
                 anonymous=anonymous,
-                aliases=aliases,
             )
             return callback
 

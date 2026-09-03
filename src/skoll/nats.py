@@ -78,7 +78,7 @@ class NatsMediator(Mediator):
                     cb=wrap_callback(subscriber),
                     durable=subscriber.durable,
                     config=consumer_config(subscriber),
-                    queue=subscriber.service_name if subscriber.queued else None,
+                    queue=subscriber.durable if subscriber.queued else None,
                 )
             else:
                 sub = await self.nc.subscribe(
@@ -172,12 +172,7 @@ class NatsMediator(Mediator):
 
 def get_subscribers(services: Services | Service) -> list[Subscriber]:
     services_list = services.items if isinstance(services, Services) else [services]
-    return [
-        subscriber.on_subject(subject)
-        for service in services_list
-        for subscriber in service.subscribers
-        for subject in subscriber.every_subject()
-    ]
+    return [subscriber for service in services_list for subscriber in service.subscribers]
 
 
 async def run_callback(subscriber: Subscriber, message: Message) -> Result[t.Any]:
