@@ -1,3 +1,4 @@
+import re
 import typing as t
 import collections.abc as c
 
@@ -7,10 +8,41 @@ from skoll.result import Result
 
 from .primitives import Object, ID, DateTime, Map, Ulid
 
-type SubscriberAccess = t.Literal["PUBLIC", "PRIVATE", "INTERNAL"]
+type SubjectScope = t.Literal["PUBLIC", "INTERNAL"]
 type SubscriberCallback = t.Callable[..., c.Coroutine[t.Any, t.Any, Result[t.Any]]]
 
+SUBJECT_RE = re.compile(r"^(?P<kind>cmd|qry|evt)\.(?P<scope>internal|public)\.(?P<version>v\d+)\.(?P<tail>.+)$")
+
 EMPTY_MAP: Map = Map()
+
+
+REMOVED_ACCESS_HINT = (
+    "access= was removed: a subject now carries its own scope, as"
+    " <cmd|qry|evt>.<internal|public>.<version>.<domain>.<aggregate>.<action>."
+    " Rename the subject and, while both names must live, pass aliases=(<old subject>,)."
+)
+
+
+def reject_access(access: t.Any) -> None:
+    if access is None:
+        return
+    raise TypeError(REMOVED_ACCESS_HINT)
+
+
+def subject_scope(subject: str) -> SubjectScope:
+    matched = SUBJECT_RE.match(subject)
+    return "PUBLIC" if matched is not None and matched.group("scope") == "public" else "INTERNAL"
+
+
+def is_scoped_subject(subject: str) -> bool:
+    return SUBJECT_RE.match(subject) is not None
+
+
+def rescope(subject: str, scope: SubjectScope) -> str:
+    matched = SUBJECT_RE.match(subject)
+    if matched is None:
+        return subject
+    return f"{matched.group('kind')}.{scope.lower()}.{matched.group('version')}.{matched.group('tail')}"
 
 
 @define(frozen=True, kw_only=True, slots=True, eq=False)
@@ -52,11 +84,48 @@ class Subscriber:
     queued: bool
     will_reply: bool
     service_name: str
-    access: SubscriberAccess
     js_stream: str | None = None
     callback: SubscriberCallback
     payload_key: str | None = None
     max_deliver: int | None = None
+    anonymous: bool = False
+    aliases: tuple[str, ...] = ()
+    is_alias: bool = False
+
+    @property
+    def durable(self) -> str:
+        if not self.is_alias:
+            return self.service_name
+        return f"{self.service_name}_{re.sub(r'[^A-Za-z0-9_-]', '_', self.subject)}"
+
+    @property
+    def scope(self) -> SubjectScope:
+        return subject_scope(self.subject)
+
+    @property
+    def is_public(self) -> bool:
+        return self.scope == "PUBLIC"
+
+    def every_subject(self) -> tuple[str, ...]:
+        return (self.subject, *self.aliases)
+
+    def on_subject(self, subject: str) -> "Subscriber":
+        return self if subject == self.subject else evolve_subject(self, subject)
+
+
+def evolve_subject(subscriber: Subscriber, subject: str) -> Subscriber:
+    return Subscriber(
+        subject=subject,
+        queued=subscriber.queued,
+        will_reply=subscriber.will_reply,
+        service_name=subscriber.service_name,
+        js_stream=subscriber.js_stream,
+        callback=subscriber.callback,
+        payload_key=subscriber.payload_key,
+        max_deliver=subscriber.max_deliver,
+        anonymous=subscriber.anonymous,
+        is_alias=True,
+    )
 
 
 @define(kw_only=True, slots=True, frozen=True)
@@ -65,8 +134,13 @@ class Service:
     name: str
     subscribers: list[Subscriber] = field(factory=list)
 
-    def subjects(self, filters: list[SubscriberAccess]) -> list[str]:
-        return [sub.subject for sub in self.subscribers if sub.access in filters]
+    def subjects(self, scopes: list[SubjectScope] | None = None) -> list[str]:
+        if scopes is None:
+            return [sub.subject for sub in self.subscribers]
+        return [sub.subject for sub in self.subscribers if sub.scope in scopes]
+
+    def anonymous_subjects(self) -> list[str]:
+        return [sub.subject for sub in self.subscribers if sub.anonymous]
 
     def _add(
         self,
@@ -74,10 +148,11 @@ class Service:
         will_reply: bool,
         queued: bool,
         callback: SubscriberCallback,
-        access: SubscriberAccess,
         js_stream: str | None = None,
         payload_key: str | None = None,
         max_deliver: int | None = None,
+        anonymous: bool = False,
+        aliases: tuple[str, ...] = (),
     ):
         self.subscribers.append(
             Subscriber(
@@ -89,7 +164,8 @@ class Service:
                 service_name=self.name,
                 payload_key=payload_key,
                 max_deliver=max_deliver,
-                access=access or "INTERNAL",
+                anonymous=anonymous,
+                aliases=tuple(aliases),
             )
         )
 
@@ -100,26 +176,48 @@ class Service:
         stream: str | None = None,
         payload_key: str | None = None,
         max_deliver: int | None = None,
-        access: SubscriberAccess = "INTERNAL",
+        anonymous: bool = False,
+        aliases: tuple[str, ...] = (),
+        access: t.Any = None,
     ):
+        reject_access(access)
+
         def decorator(callback: SubscriberCallback):
             self._add(
                 subject,
                 queued=queued,
-                access=access,
                 js_stream=stream,
                 will_reply=False,
                 callback=callback,
                 payload_key=payload_key,
                 max_deliver=max_deliver,
+                anonymous=anonymous,
+                aliases=aliases,
             )
             return callback
 
         return decorator
 
-    def reply(self, subject: str, payload_key: str | None = None, access: SubscriberAccess = "INTERNAL"):
+    def reply(
+        self,
+        subject: str,
+        payload_key: str | None = None,
+        anonymous: bool = False,
+        aliases: tuple[str, ...] = (),
+        access: t.Any = None,
+    ):
+        reject_access(access)
+
         def decorator(callback: SubscriberCallback):
-            self._add(subject, will_reply=True, queued=True, callback=callback, access=access, payload_key=payload_key)
+            self._add(
+                subject,
+                will_reply=True,
+                queued=True,
+                callback=callback,
+                payload_key=payload_key,
+                anonymous=anonymous,
+                aliases=aliases,
+            )
             return callback
 
         return decorator
@@ -130,8 +228,11 @@ class Services:
 
     items: list[Service] = field(factory=list)
 
-    def subjects(self, filters: list[SubscriberAccess]) -> list[str]:
-        return [sub for s in self.items for sub in s.subjects(filters)]
+    def subjects(self, scopes: list[SubjectScope] | None = None) -> list[str]:
+        return [sub for s in self.items for sub in s.subjects(scopes)]
+
+    def anonymous_subjects(self) -> list[str]:
+        return [sub for s in self.items for sub in s.anonymous_subjects()]
 
     def extend(self, service: list[Service] | list[t.Self]):
         for item in service:
@@ -147,4 +248,14 @@ class Services:
         return Services(items=(other.items if isinstance(other, Services) else [other]) + self.items)
 
 
-__all__ = ["Service", "Message", "Services", "Subscriber", "SubscriberAccess", "SubscriberCallback"]
+__all__ = [
+    "Service",
+    "Message",
+    "Services",
+    "Subscriber",
+    "SubjectScope",
+    "SubscriberCallback",
+    "subject_scope",
+    "is_scoped_subject",
+    "rescope",
+]

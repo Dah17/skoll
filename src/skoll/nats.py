@@ -76,7 +76,7 @@ class NatsMediator(Mediator):
                     subject=subscriber.subject,
                     stream=subscriber.js_stream,
                     cb=wrap_callback(subscriber),
-                    durable=subscriber.service_name,
+                    durable=subscriber.durable,
                     config=consumer_config(subscriber),
                     queue=subscriber.service_name if subscriber.queued else None,
                 )
@@ -100,7 +100,7 @@ class NatsMediator(Mediator):
         if subscriber.max_deliver is None or subscriber.js_stream is None:
             return None
         try:
-            info = await self.js.consumer_info(subscriber.js_stream, subscriber.service_name)
+            info = await self.js.consumer_info(subscriber.js_stream, subscriber.durable)
         except NotFoundError:
             return None
         if info.config.max_deliver == subscriber.max_deliver:
@@ -172,7 +172,12 @@ class NatsMediator(Mediator):
 
 def get_subscribers(services: Services | Service) -> list[Subscriber]:
     services_list = services.items if isinstance(services, Services) else [services]
-    return [subscriber for service in services_list for subscriber in service.subscribers]
+    return [
+        subscriber.on_subject(subject)
+        for service in services_list
+        for subscriber in service.subscribers
+        for subject in subscriber.every_subject()
+    ]
 
 
 async def run_callback(subscriber: Subscriber, message: Message) -> Result[t.Any]:
