@@ -16,6 +16,85 @@ EMAIL_REGEX = r"^[^@]+@[^@]+$"
 TIME_REGEX = r"^(?:[01]?[0-9]|2[0-3]):[0-5][0-9]$"
 LOCALE_PATTERN = r"^[a-z]{2,3}(-[A-Z][a-z]{3})?(-[A-Z]{2}|-[0-9]{3})?$"
 
+LOCALE_DEFAULT_REGIONS: dict[str, str] = {
+    "ar": "SA",
+    "bg": "BG",
+    "bs": "BA",
+    "ca": "ES",
+    "cs": "CZ",
+    "cy": "GB",
+    "da": "DK",
+    "de": "DE",
+    "el": "GR",
+    "en": "US",
+    "es": "ES",
+    "et": "EE",
+    "eu": "ES",
+    "fi": "FI",
+    "fr": "FR",
+    "ga": "IE",
+    "gl": "ES",
+    "he": "IL",
+    "hi": "IN",
+    "hr": "HR",
+    "hu": "HU",
+    "is": "IS",
+    "it": "IT",
+    "ja": "JP",
+    "ko": "KR",
+    "lb": "LU",
+    "lt": "LT",
+    "lv": "LV",
+    "mk": "MK",
+    "mt": "MT",
+    "nb": "NO",
+    "nl": "NL",
+    "nn": "NO",
+    "no": "NO",
+    "pl": "PL",
+    "pt": "PT",
+    "ro": "RO",
+    "ru": "RU",
+    "sk": "SK",
+    "sl": "SI",
+    "sq": "AL",
+    "sr": "RS",
+    "sv": "SE",
+    "tr": "TR",
+    "uk": "UA",
+    "zh": "CN",
+}
+
+
+def normalize_locale(raw: t.Any, *, expand: bool = False) -> str | None:
+    value = (safe_call(str, raw) or "").strip().replace("_", "-")
+    if not value:
+        return None
+
+    parts = [part for part in value.split("-") if part]
+    if not parts or not parts[0].isalpha() or not 2 <= len(parts[0]) <= 3:
+        return None
+
+    language = parts[0].lower()
+    script: str | None = None
+    region: str | None = None
+    for part in parts[1:]:
+        if len(part) == 4 and part.isalpha() and script is None:
+            script = part.capitalize()
+        elif len(part) == 2 and part.isalpha() and region is None:
+            region = part.upper()
+        elif len(part) == 3 and part.isdigit() and region is None:
+            region = part
+        else:
+            return None
+
+    if region is None and expand:
+        region = LOCALE_DEFAULT_REGIONS.get(language)
+
+    tag = "-".join(part for part in (language, script, region) if part)
+    return tag if re.fullmatch(LOCALE_PATTERN, tag) is not None else None
+
+
 __all__ = [
     "ID",
     "Map",
@@ -313,8 +392,8 @@ class Locale(Object):
     @t.override
     @classmethod
     def prepare(cls, raw: t.Any) -> Result[t.Any]:
-        value = (safe_call(str, raw) or "").strip()
-        if value and re.fullmatch(LOCALE_PATTERN, value) is not None:
+        value = normalize_locale(raw, expand=True)
+        if value is not None:
             return ok(value)
         return fail(
             InvalidField(
@@ -332,13 +411,14 @@ class LocalizedText(Object):
     @t.override
     @classmethod
     def prepare(cls, raw: t.Any) -> Result[t.Any]:
-        value = safe_call(dict, raw)
+        value = t.cast(dict[t.Any, t.Any] | None, safe_call(dict, raw))
 
         if value is not None:
-            keys_valid = all(isinstance(k, str) and re.fullmatch(LOCALE_PATTERN, k) for k in value.keys())
+            tags = {k: normalize_locale(k, expand=True) for k in value if isinstance(k, str)}
+            keys_valid = len(tags) == len(value) and all(tag is not None for tag in tags.values())
             values_valid = all(isinstance(v, str) for v in value.values())
             if keys_valid and values_valid:
-                return ok({"value": t.cast(dict[str, str], value)})
+                return ok({"value": {t.cast(str, tags[key]): str(text) for key, text in value.items()}})
 
         return fail(
             InvalidField(
