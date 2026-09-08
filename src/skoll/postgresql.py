@@ -141,14 +141,32 @@ class PostgresRepo[T: Entity](Repository[T]):
 
     @t.override
     async def save(self, state: T) -> None:
+        """Insert a new entity, or update the row the caller read.
+
+        An update is optimistic -- `WHERE id = ? AND version = ?` against the version the caller
+        started from -- so a row someone else has written since is not overwritten. When that
+        happens Postgres reports zero rows and nothing else: the caller's work is gone, `save`
+        returns, and the aggregate is left holding a state that was never stored. That is why the
+        row count is read here. Losing a write is a `Conflict`, and a caller that can re-read and
+        re-apply should do so; one that cannot at least fails where the loss happened rather than
+        somewhere downstream that wonders why the entity never changed.
+        """
+        raw = state.serialize()
+        inserting = state.version.value == 0
         try:
-            raw = state.serialize()
-            sql_stm, params = self.__prepare_insert(raw) if state.version.value == 0 else self.__prepare_update(raw)
-            _ = await self.conn.execute(sql_stm, *params)
+            sql_stm, params = self.__prepare_insert(raw) if inserting else self.__prepare_update(raw)
+            status = await self.conn.execute(sql_stm, *params)
         except UniqueViolationError as exc:
-            raise Conflict(debug={"raw": state.serialize(), "table": self.table}) from exc
+            raise Conflict(debug={"raw": raw, "table": self.table}) from exc
         except Exception as exc:
-            raise InternalError.from_exception(exc, extra={"raw": state.serialize(), "table": self.table}) from exc
+            raise InternalError.from_exception(exc, extra={"raw": raw, "table": self.table}) from exc
+
+        # Outside the `except`, or the generic handler above would bury it in an InternalError.
+        if not inserting and _rows_affected(status) == 0:
+            raise Conflict(
+                hints={"reason": "That row moved on since it was read, so the write was not applied"},
+                debug={"id": raw.get("id"), "version": raw.get("version"), "table": self.table},
+            )
 
     def __prepare_insert(self, raw: dict[str, t.Any]):
         keys: list[str] = []
@@ -170,6 +188,18 @@ class PostgresRepo[T: Entity](Repository[T]):
             params.append(dumps(kv[1]) if isinstance(kv[1], (dict, list)) else kv[1])
         sql_stm = f"UPDATE {self.table} SET {", ".join(changes)} WHERE id = $1 AND version = $2"
         return sql_stm, params
+
+
+def _rows_affected(status: t.Any) -> int | None:
+    """The row count in an asyncpg command tag -- "UPDATE 1", "DELETE 0", "INSERT 0 1".
+
+    `None` when the tag is not one this understands, which reads as "cannot tell" rather than
+    "nothing was written": a caller must not be handed a conflict on the strength of a guess.
+    """
+    if not isinstance(status, str):
+        return None
+    tail = status.rsplit(" ", 1)[-1]
+    return int(tail) if tail.isdigit() else None
 
 
 __all__ = ["PostgresDB", "PostgresRepo", "parse_pg_row"]
