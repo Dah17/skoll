@@ -100,14 +100,39 @@ class WorkingHours(Object):
 
 @define(kw_only=True, slots=True, frozen=True, eq=False)
 class Entity[T: ID = Ulid](Object, ABC):
+    """An identified aggregate that remembers the version storage last agreed with it on.
+
+    `version` is the number written alongside the row, and every `evolve` moves it one step
+    forward. `stored_version` is where storage was left: `None` while the aggregate has never been
+    written, otherwise the version the row still carries. A repository reads both -- `None` means
+    insert, a number is what the row must still show for an update to be safe -- which is what
+    lets an aggregate be evolved as many times as the work needs before it is saved.
+
+    It is internal: in-memory bookkeeping about persistence rather than part of the entity, so it
+    is left out of `serialize` and of the creation schema, and a restored entity starts out looking
+    unwritten. A repository closes that gap by calling `mark_stored` once the state and the row
+    agree, on the way out of a read and after a successful write.
+    """
 
     created_at: DateTime = field(factory=DateTime.now)
     updated_at: DateTime = field(factory=DateTime.now)
     version: PositiveInt = field(factory=PositiveInt.zero)
 
+    stored_version: int | None = internal(default=None)
+
     @abstractmethod
     def get_id(self) -> T:
         raise NotImplementedError("Subclasses must implement the `id` property to return the correct ID type.")
+
+    def mark_stored(self) -> None:
+        """Record that storage now holds exactly this state, so later writes guard on this version.
+
+        This writes through the frozen shell on purpose. What it sets is not part of the entity --
+        not its identity, not its value, not what it serializes to -- it is a note about the row
+        behind it, and handing back a copy would oblige every caller of `save` and every read path
+        to rebind a variable to keep a fact they never asked to carry.
+        """
+        object.__setattr__(self, "stored_version", self.version.value)
 
     @t.override
     def __eq__(self, other: t.Any) -> bool:

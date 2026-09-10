@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, UTC
 from skoll.constants import CURRENCIES, COUNTRY_CODES
 from skoll.utils import new_ulid, to_tz, to_snake_case, safe_call, encrypt_value, decrypt_value
 
-from .object import Object, Enum
+from .object import Object, Enum, internal
 
 ULID_REGEX = r"^[0-9a-z]{26}$"
 EMAIL_REGEX = r"^[^@]+@[^@]+$"
@@ -105,6 +105,7 @@ __all__ = [
     "Secret",
     "Object",
     "Locale",
+    "internal",
     "Timezone",
     "DateTime",
     "Currency",

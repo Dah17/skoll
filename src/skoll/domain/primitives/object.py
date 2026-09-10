@@ -9,7 +9,21 @@ from skoll.utils import to_snake_case, serialize, safe_call
 from skoll.exceptions import MissingField, InvalidField, Error
 from skoll.result import Result, fail, ok, combine, is_fail, is_ok
 
-__all__ = ["Enum", "Object"]
+__all__ = ["Enum", "Object", "internal"]
+
+
+INTERNAL = "skoll.internal"
+
+
+def internal(**kwargs: t.Any) -> t.Any:
+    """An attrs field the object keeps for itself: bookkeeping, never part of the data.
+
+    Internal fields are skipped by `serialize` and by the creation schema, so they never reach a
+    payload, a database column or a `create` call. They travel with the object in memory and stop
+    at its edges.
+    """
+    metadata = {**kwargs.pop("metadata", {}), INTERNAL: True}
+    return attrs.field(**kwargs, metadata=metadata)
 
 
 class Enum(_Enum):
@@ -43,7 +57,8 @@ class Enum(_Enum):
 class Object(ABC):
 
     def serialize(self) -> t.Any:
-        data = {f.name: getattr(self, f.name) for f in attrs.fields(self.__class__)}
+        fields = (f for f in attrs.fields(self.__class__) if not f.metadata.get(INTERNAL, False))
+        data = {f.name: getattr(self, f.name) for f in fields}
         if len(data) == 1 and data.get("value") is not None:
             return serialize(data["value"])
         return serialize(data)
@@ -262,6 +277,8 @@ def get_schema(cls: type[t.Any]) -> dict[str, _SchemaItem] | None:
 
     schema: dict[str, _SchemaItem] = {}
     for key, attr in attrs.fields_dict(cls).items():
+        if attr.metadata.get(INTERNAL, False):
+            continue
         variants = _split_types(attr.type)
         optional = type(None) in variants
         types = tuple(item for item in variants if item is not type(None))

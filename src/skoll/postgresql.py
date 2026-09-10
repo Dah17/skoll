@@ -93,6 +93,9 @@ class PostgresRepo[T: Entity](Repository[T]):
             res = self.restore_func(parse_pg_row(record))
             if is_fail(res):
                 raise ValueError("Entity Parsing failed")
+            # The entity now mirrors a row, so a later `save` guards on this version rather than
+            # trying to insert it afresh.
+            res.value.mark_stored()
             return res.value
         except Exception as exc:
             raise InternalError.from_exception(exc, extra={"criteria": criteria.as_sql}) from exc
@@ -130,6 +133,7 @@ class PostgresRepo[T: Entity](Repository[T]):
                 res = self.restore_func(parse_pg_row(row))
                 if is_fail(res):
                     raise ValueError("Entity Parsing failed")
+                res.value.mark_stored()
                 items.append(res.value)
             return items, count
             # if len(items) == criteria.limit + 1:
@@ -143,18 +147,25 @@ class PostgresRepo[T: Entity](Repository[T]):
     async def save(self, state: T) -> None:
         """Insert a new entity, or update the row the caller read.
 
-        An update is optimistic -- `WHERE id = ? AND version = ?` against the version the caller
-        started from -- so a row someone else has written since is not overwritten. When that
-        happens Postgres reports zero rows and nothing else: the caller's work is gone, `save`
-        returns, and the aggregate is left holding a state that was never stored. That is why the
-        row count is read here. Losing a write is a `Conflict`, and a caller that can re-read and
-        re-apply should do so; one that cannot at least fails where the loss happened rather than
-        somewhere downstream that wonders why the entity never changed.
+        The entity says which of the two this is and what the guard should be: `stored_version` is
+        `None` until a row exists, and afterwards it is the version that row still carries. An
+        update is optimistic -- `WHERE id = ? AND version = ?` against that number -- so a row
+        someone else has written since is not overwritten. Taking the guard from the entity rather
+        than assuming a single step back from its current version is what lets an aggregate be
+        evolved as many times as the work needs before it is saved.
+
+        When the guard does not match, Postgres reports zero rows and nothing else: the caller's
+        work is gone, `save` returns, and the aggregate is left holding a state that was never
+        stored. That is why the row count is read here. Losing a write is a `Conflict`, and a
+        caller that can re-read and re-apply should do so; one that cannot at least fails where the
+        loss happened rather than somewhere downstream that wonders why the entity never changed.
         """
         raw = state.serialize()
-        inserting = state.version.value == 0
+        stored_version = state.stored_version
         try:
-            sql_stm, params = self.__prepare_insert(raw) if inserting else self.__prepare_update(raw)
+            sql_stm, params = (
+                self.__prepare_insert(raw) if stored_version is None else self.__prepare_update(raw, stored_version)
+            )
             status = await self.conn.execute(sql_stm, *params)
         except UniqueViolationError as exc:
             raise Conflict(debug={"raw": raw, "table": self.table}) from exc
@@ -162,11 +173,19 @@ class PostgresRepo[T: Entity](Repository[T]):
             raise InternalError.from_exception(exc, extra={"raw": raw, "table": self.table}) from exc
 
         # Outside the `except`, or the generic handler above would bury it in an InternalError.
-        if not inserting and _rows_affected(status) == 0:
+        if stored_version is not None and _rows_affected(status) == 0:
             raise Conflict(
                 hints={"reason": "That row moved on since it was read, so the write was not applied"},
-                debug={"id": raw.get("id"), "version": raw.get("version"), "table": self.table},
+                debug={
+                    "id": raw.get("id"),
+                    "table": self.table,
+                    "version": raw.get("version"),
+                    "stored_version": stored_version,
+                },
             )
+
+        # The row and the entity now agree, so a later `save` guards on this version.
+        state.mark_stored()
 
     def __prepare_insert(self, raw: dict[str, t.Any]):
         keys: list[str] = []
@@ -180,8 +199,8 @@ class PostgresRepo[T: Entity](Repository[T]):
         sql_stm = f"INSERT INTO {self.table}({", ".join(attrs)}) VALUES({", ".join(keys)})"
         return sql_stm, params
 
-    def __prepare_update(self, raw: dict[str, t.Any]):
-        params = [raw["id"], raw["version"] - 1]
+    def __prepare_update(self, raw: dict[str, t.Any], stored_version: int):
+        params = [raw["id"], stored_version]
         changes: list[str] = []
         for idx, kv in enumerate(raw.items()):
             changes.append(f"{kv[0]} = ${idx + 3}")
