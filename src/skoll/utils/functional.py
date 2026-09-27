@@ -9,7 +9,7 @@ from ulid import ulid
 from attrs import define
 from json import loads, dumps
 from zoneinfo import ZoneInfo
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, MultiFernet
 from base64 import b64encode, b64decode
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
@@ -29,12 +29,40 @@ class DbCursor:
 new_ulid: t.Callable[[], str] = lambda: ulid().lower()
 
 
+_ENCRYPTION_KEYS_SOURCES = ["/run/secrets/encryption_keys", "ENCRYPTION_KEYS", "SECRET_ENCRYPTION_KEY"]
+_RE_KEYS_SEPARATOR = re.compile(r"[\s,;]+")
+
+
+def _read_encryption_keys_source(source: str) -> str:
+    value = source if source.startswith("/") else os.getenv(source, "")
+    if value.startswith("/"):
+        if not os.path.isfile(value):
+            return ""
+        with open(value, "r") as f:
+            return f.read()
+    return value
+
+
+def get_secret_encryption_keys() -> list[str]:
+    """Return the encryption keys, the first one being the primary key used to encrypt.
+
+    Keys are looked up in order from `/run/secrets/encryption_keys`, `ENCRYPTION_KEYS` and the legacy
+    `SECRET_ENCRYPTION_KEY`; the first non-empty source wins. Env values may also point to a file.
+    Multiple keys are separated by commas, semicolons or whitespace (e.g. one key per line).
+    """
+    for source in _ENCRYPTION_KEYS_SOURCES:
+        keys = [k for k in _RE_KEYS_SEPARATOR.split(_read_encryption_keys_source(source)) if k]
+        if keys:
+            return keys
+    raise ValueError("No encryption key configured: set /run/secrets/encryption_keys or ENCRYPTION_KEYS")
+
+
 def get_secret_encryption_key() -> str:
-    key = get_config_var(["SECRET_ENCRYPTION_KEY"], default="")()
-    if key.startswith("/"):
-        with open(key, "r") as f:
-            key = f.read()
-    return key
+    return get_secret_encryption_keys()[0]
+
+
+def get_cipher() -> MultiFernet:
+    return MultiFernet([Fernet(key) for key in get_secret_encryption_keys()])
 
 
 def encode_value(value: str) -> str:
@@ -49,13 +77,16 @@ def decode_value(value: str) -> str:
 
 
 def encrypt_value(value: str) -> str:
-    cipher = Fernet(get_secret_encryption_key())
-    return cipher.encrypt(value.encode("utf-8")).decode("utf-8")
+    return get_cipher().encrypt(value.encode("utf-8")).decode("utf-8")
 
 
 def decrypt_value(value: str) -> str:
-    cipher = Fernet(get_secret_encryption_key())
-    return cipher.decrypt(value.encode("utf-8")).decode("utf-8")
+    return get_cipher().decrypt(value.encode("utf-8")).decode("utf-8")
+
+
+def rotate_encrypted_value(value: str) -> str:
+    """Re-encrypt a value with the primary key, whichever configured key it was encrypted with."""
+    return get_cipher().rotate(value.encode("utf-8")).decode("utf-8")
 
 
 def from_json(val: t.Any) -> t.Any:
@@ -283,6 +314,7 @@ __all__ = [
     "decode_value",
     "encrypt_value",
     "decrypt_value",
+    "rotate_encrypted_value",
     "sanitize_dict",
     "to_camel_case",
     "to_snake_case",
